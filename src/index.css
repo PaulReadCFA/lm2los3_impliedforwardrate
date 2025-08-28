@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CFA defaults */
+:root {
+  --cfa-blue: #4476FF;
+  --cfa-dark: #06005A;
+}
+body { font-family: Arial, sans-serif; }
+h1,h2,h3,h4 { font-family: Georgia, serif; }
