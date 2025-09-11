@@ -198,11 +198,7 @@ export default function ForwardRatesCalculator() {
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-serif text-slate-800 mb-2">Implied Forward Interest Rates</h1>
-          <p className="text-gray-600">CFA Level 1 • Quantitative Methods • Learning Module 2</p>
-        </div>
+
 
         {/* Forward Rate Model Inputs & Results */}
         <Card title="Implied Forward Interest Rates Analysis">
