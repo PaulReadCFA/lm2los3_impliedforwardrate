@@ -98,6 +98,7 @@ function calculateForwardRates({ oneYearRate, twoYearRate }) {
       oneYearBondYield: null,
       impliedForwardRate: null,
       twoYearLine: r2 * 100,
+      twoYearLineLabel: r2 * 100,        // Add this for the orange line label
     },
     // t=1: First bond matures and reinvestment
     {
@@ -109,6 +110,7 @@ function calculateForwardRates({ oneYearRate, twoYearRate }) {
       oneYearBondYield: r1 * 100,
       impliedForwardRate: null,
       twoYearLine: r2 * 100,
+      twoYearLineLabel: null,
     },
     // t=2: Final maturity
     {
@@ -119,6 +121,7 @@ function calculateForwardRates({ oneYearRate, twoYearRate }) {
       oneYearBondYield: null,
       impliedForwardRate: forwardRatePct,
       twoYearLine: r2 * 100,
+      twoYearLineLabel: null,
     }
   ];
   
@@ -143,17 +146,142 @@ const CustomLabel = (props) => {
   const isNegative = value < 0;
   const labelY = isNegative ? y + height + 15 : y - 8;
   
+  // Determine text color based on bar color for accessibility
+  const getTextColor = () => {
+    // Check if label is over a dark bar (blue-600, emerald-500, emerald-800)
+    // Use white text on dark backgrounds, black on light backgrounds
+    if (y > height * 0.5) {
+      // Label is likely over a dark bar area
+      return "#ffffff";
+    }
+    return "#000000";
+  };
+  
+  // Format negative values with parentheses (financial convention)
+  const formatValue = (val) => {
+    const absVal = Math.abs(val);
+    return isNegative ? `(${absVal.toFixed(2)})` : `${absVal.toFixed(2)}`;
+  };
+  
   return (
     <text
       x={x + width / 2}
       y={labelY}
       textAnchor="middle"
-      fill="#000"
+      fill={getTextColor()}
       fontSize="11"
       fontWeight="bold"
+      stroke={getTextColor() === "#ffffff" ? "#000000" : "none"}
+      strokeWidth={getTextColor() === "#ffffff" ? 0.5 : 0}
     >
-      {isNegative ? '-' : ''}${Math.abs(value).toFixed(2)}
+      {formatValue(value)}
     </text>
+  );
+};
+
+// Custom dot component with leader line to white space
+const LabeledDot = ({ cx, cy, payload, dataKey, color, name }) => {
+  const value = payload[dataKey];
+  if (!value) return null;
+  
+  // Position dots in clear white space with leader lines
+  let labelX, labelY, dotX, dotY;
+  
+  if (dataKey === 'oneYearBondYield') {
+    // Position in upper-left white space
+    dotX = cx;
+    dotY = cy;
+    labelX = cx - 60;
+    labelY = cy - 80;
+  } else if (dataKey === 'impliedForwardRate') {
+    // Position in upper-right white space, but shorter line
+    dotX = cx;
+    dotY = cy;
+    labelX = cx + 40;
+    labelY = cy - 40;
+  } else if (dataKey === 'twoYearLineLabel') {
+    // Position in left white space for orange line
+    dotX = cx;
+    dotY = cy;
+    labelX = cx - 80;
+    labelY = cy - 50;
+  }
+  
+  return (
+    <g>
+      {/* Original dot position */}
+      <circle cx={dotX} cy={dotY} r={4} fill={color} strokeWidth={2} opacity={0.3} />
+      
+      {/* Leader line to label */}
+      <line
+        x1={dotX}
+        y1={dotY}
+        x2={labelX}
+        y2={labelY + 10}
+        stroke={color}
+        strokeWidth={2}
+        strokeDasharray="2 2"
+        opacity={0.8}
+      />
+      
+      {/* Label in white space */}
+      <circle cx={labelX} cy={labelY + 10} r={6} fill={color} strokeWidth={3} />
+      <text 
+        x={labelX} 
+        y={labelY - 5} 
+        textAnchor="middle" 
+        fill={color} 
+        fontSize={11} 
+        fontWeight="bold"
+      >
+        {value.toFixed(2)}%
+      </text>
+    </g>
+  );
+};
+
+// White pill label component for better visibility
+const PillLabel = (props) => {
+  const { x, y, width, height, value } = props;
+  
+  if (!value || Math.abs(value) < 0.01) return null;
+  
+  const isNegative = value < 0;
+  const labelY = isNegative ? y + height + 15 : y - 8;
+  
+  // Format with parentheses for negatives
+  const formattedText = isNegative ? `(${Math.abs(value).toFixed(2)})` : `${value.toFixed(2)}`;
+  
+  // Pill dimensions
+  const pillWidth = Math.min(width * 0.9, 65);
+  const pillHeight = 18;
+  const pillX = x + width / 2 - pillWidth / 2;
+  const pillY = labelY - pillHeight / 2 - 7;
+  
+  return (
+    <g>
+      <rect
+        x={pillX}
+        y={pillY}
+        width={pillWidth}
+        height={pillHeight}
+        rx={9}
+        fill="white"
+        stroke="#9ca3af"
+        strokeWidth={1}
+        opacity={0.95}
+      />
+<text
+x={pillX + pillWidth / 2}
+y={pillY + pillHeight / 2 + 4}
+textAnchor="middle"
+fill="black"
+fontSize="10"
+fontWeight="600"
+>
+{formattedText}
+</text>
+    </g>
   );
 };
 
@@ -316,26 +444,34 @@ export default function ForwardRatesCalculator() {
               </div>
 
               {/* Chart Legend */}
-              <div className="mb-4 text-sm text-gray-600 flex items-center gap-6 flex-wrap">
+              <div className="mb-4 text-sm text-gray-600 flex items-center gap-4 flex-wrap">
                 <span className="inline-flex items-center">
-                  <span className="w-4 h-4 bg-emerald-600 mr-2 rounded"></span>
-                  Subsequent One-Year Investments
+                  <span className="w-3 h-3 bg-emerald-500 mr-1 rounded"></span>
+                  Initial/Final
                 </span>
                 <span className="inline-flex items-center">
-                  <span className="w-4 h-4 bg-blue-600 mr-2 rounded"></span>
-                  Two-Year Investment
+                  <span className="w-3 h-3 bg-emerald-300 mr-1 rounded"></span>
+                  Bond Maturity (+)
                 </span>
                 <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-blue-700 mr-2 rounded-full"></span>
-                  One-Year Bond Yield: {inputs.oneYearRate.toFixed(2)}%
+                  <span className="w-3 h-3 bg-emerald-800 mr-1 rounded"></span>
+                  Reinvestment (-)
                 </span>
                 <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-purple-700 mr-2 rounded-full"></span>
-                  Implied Forward Rate: {model.forwardRate.toFixed(2)}%
+                  <span className="w-3 h-3 bg-blue-600 mr-1 rounded"></span>
+                  Two-Year Strategy
                 </span>
                 <span className="inline-flex items-center">
-                  <span className="w-3 h-1 bg-orange-600 mr-2"></span>
-                  Two-Year Bond Yield: {inputs.twoYearRate.toFixed(2)}%
+                  <span className="w-2 h-2 bg-blue-700 mr-1 rounded-full"></span>
+                  One-Year: {inputs.oneYearRate.toFixed(2)}%
+                </span>
+                <span className="inline-flex items-center">
+                  <span className="w-2 h-2 bg-purple-700 mr-1 rounded-full"></span>
+                  Forward: {model.forwardRate.toFixed(2)}%
+                </span>
+                <span className="inline-flex items-center">
+                  <span className="w-2 h-1 bg-orange-600 mr-1"></span>
+                  Two-Year: {inputs.twoYearRate.toFixed(2)}%
                 </span>
               </div>
 
@@ -372,6 +508,7 @@ export default function ForwardRatesCalculator() {
                       label={{ value: 'Rates', angle: -90, position: 'insideLeft', style: { fill: '#7c3aed', textAnchor: 'middle' } }}
                       tickFormatter={(value) => `${value.toFixed(1)}%`}
                       domain={[0, Math.max(15, model.forwardRate * 1.2)]}
+                      tickCount={8}
                       tick={{ fill: '#7c3aed' }}
                       axisLine={{ stroke: '#7c3aed' }}
                     />
@@ -397,39 +534,7 @@ export default function ForwardRatesCalculator() {
                       }}
                     />
                     
-                    {/* Sequential Strategy Cash Flows */}
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentInvestment" 
-                      fill="#059669" 
-                      name="Sequential Strategy"
-                      label={CustomLabel}
-                    />
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentMaturity" 
-                      fill="#059669" 
-                      name="Maturity Payment"
-                      label={CustomLabel}
-                    />
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentReinvestment" 
-                      fill="#047857" 
-                      name="Reinvestment"
-                      label={CustomLabel}
-                    />
-                    
-                    {/* Two-Year Strategy Cash Flows */}
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="twoYearInvestment" 
-                      fill="#2563eb" 
-                      name="Two-Year Strategy"
-                      label={CustomLabel}
-                    />
-                    
-                    {/* Key Rate Line - Two-year rate baseline */}
+                    {/* Key Rate Line - Two-year rate baseline (render first, behind everything) */}
                     <Line 
                       yAxisId="left" 
                       type="monotone" 
@@ -441,26 +546,70 @@ export default function ForwardRatesCalculator() {
                       name={`Two-Year Rate (${inputs.twoYearRate.toFixed(2)}%)`}
                     />
                     
-                    {/* One-Year Rate Indicator - At year 1 */}
+                    {/* Orange line label at year 0 */}
+                    <Line 
+                      yAxisId="left" 
+                      type="monotone" 
+                      dataKey="twoYearLineLabel" 
+                      stroke="#ea580c" 
+                      strokeWidth={0}
+                      dot={<LabeledDot color="#ea580c" name="Two-Year Rate" />}
+                      connectNulls={false}
+                      name={`Two-Year Rate Label`}
+                    />
+                    
+                    {/* Sequential Strategy Cash Flows */}
+                    <Bar 
+                      yAxisId="right" 
+                      dataKey="subsequentInvestment" 
+                      fill="#10b981" 
+                      name="Sequential: Initial & Final"
+                      label={PillLabel}
+                    />
+                    <Bar 
+                      yAxisId="right" 
+                      dataKey="subsequentMaturity" 
+                      fill="#34d399" 
+                      name="Sequential: Bond Maturity (+)"
+                      label={PillLabel}
+                    />
+                    <Bar 
+                      yAxisId="right" 
+                      dataKey="subsequentReinvestment" 
+                      fill="#065f46" 
+                      name="Sequential: Reinvestment (-)"
+                      label={PillLabel}
+                    />
+                    
+                    {/* Two-Year Strategy Cash Flows */}
+                    <Bar 
+                      yAxisId="right" 
+                      dataKey="twoYearInvestment" 
+                      fill="#2563eb" 
+                      name="Two-Year Strategy"
+                      label={PillLabel}
+                    />
+                    
+                    {/* One-Year Rate Indicator - At year 1 with custom labeled dot */}
                     <Line 
                       yAxisId="left" 
                       type="monotone" 
                       dataKey="oneYearBondYield" 
                       stroke="#1d4ed8" 
                       strokeWidth={0}
-                      dot={{ fill: '#1d4ed8', strokeWidth: 3, r: 6 }}
+                      dot={<LabeledDot color="#1d4ed8" name="One-Year Rate" />}
                       connectNulls={false}
                       name={`One-Year Rate (${inputs.oneYearRate.toFixed(2)}%)`}
                     />
                     
-                    {/* Forward Rate Indicator - Only at year 2 */}
+                    {/* Forward Rate Indicator - Only at year 2 with custom labeled dot */}
                     <Line 
                       yAxisId="left" 
                       type="monotone" 
                       dataKey="impliedForwardRate" 
                       stroke="#7c3aed" 
                       strokeWidth={0}
-                      dot={{ fill: '#7c3aed', strokeWidth: 3, r: 6 }}
+                      dot={<LabeledDot color="#7c3aed" name="Forward Rate" />}
                       connectNulls={false}
                       name={`Forward Rate (${model.forwardRate.toFixed(2)}%)`}
                     />
@@ -484,7 +633,7 @@ export default function ForwardRatesCalculator() {
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
           <h2 className="font-semibold text-blue-800 mb-2">Educational Context</h2>
           <div className="text-sm text-blue-700 space-y-2">
-            <p><strong>Forward Rate Theory:</strong> The market-implied rate for future borrowing/lending periods</p>
+            <p><strong>Implied Forward Rate:</strong> The market-implied rate for future borrowing/lending periods</p>
             <p><strong>No-Arbitrage Principle:</strong> Both investment strategies must yield identical returns</p>
             <p><strong>Yield Curve Analysis:</strong> Forward rates reveal market expectations about future interest rates</p>
             <p className="text-xs mt-2">This model assumes no transaction costs, perfect liquidity, and no default risk. Real markets may show slight deviations due to these factors.</p>
