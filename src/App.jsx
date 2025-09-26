@@ -1,14 +1,30 @@
-import { useMemo, useState, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
   Bar,
   Line,
-  CartesianGrid,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
+  Legend,
+  Scatter,
+  LabelList,
+  ReferenceLine,
 } from "recharts";
+
+// Accessibility-focused color tokens (WCAG compliant + colorblind friendly)
+const COLORS = {
+  primary: "#4476FF",        // Blue - safe for all colorblind types
+  dark: "#1e40af",          // Dark blue - high contrast
+  positive: "#2563eb",      // Blue instead of green - colorblind safe
+  negative: "#ea580c",      // Orange instead of red - colorblind safe  
+  purple: "#7c3aed",        // Purple - distinct from other colors
+  orange: "#ea580c",        // Orange - pairs well with blue
+  lightBlue: "#3b82f6",     // Light blue for variety
+  darkOrange: "#c2410c",    // Dark orange for contrast
+};
 
 // Shared Components
 function Card({ title, children, className = "" }) {
@@ -67,12 +83,37 @@ function ResultCard({ title, value, subtitle, description, isValid = true }) {
   );
 }
 
-function calculateForwardRates({ oneYearRate, twoYearRate }) {
-  const r1 = oneYearRate / 100; // Convert percentage to decimal
-  const r2 = twoYearRate / 100;
+// Clean label component for cash flows
+const CleanBarLabel = (props) => {
+  const { x, y, width, height, value } = props;
   
-  // Calculate implied forward rate: (1 + r2)^2 = (1 + r1) × (1 + f1,1)
-  // Therefore: f1,1 = [(1 + r2)^2 / (1 + r1)] - 1
+  if (!value || Math.abs(value) < 0.01) return null;
+  
+  const isNegative = value < 0;
+  const labelY = isNegative ? y + height + 20 : y - 10;
+  
+  // Format with dollar sign and parentheses for negatives
+  const displayValue = isNegative ? `($${Math.abs(value).toFixed(2)})` : `$${value.toFixed(2)}`;
+  
+  return (
+    <text
+      x={x + width / 2}
+      y={labelY}
+      textAnchor="middle"
+      fill="#111827"
+      fontSize="12"
+      fontWeight="normal"
+    >
+      {displayValue}
+    </text>
+  );
+};
+
+function calculateForwardRates({ s1, s2 }) {
+  const r1 = s1 / 100; // Convert percentage to decimal
+  const r2 = s2 / 100;
+  
+  // Calculate implied forward rate: f(1,1) = [(1 + s2)^2 / (1 + s1)] - 1
   const forwardRate = (Math.pow(1 + r2, 2) / (1 + r1)) - 1;
   const forwardRatePct = forwardRate * 100;
   
@@ -83,45 +124,33 @@ function calculateForwardRates({ oneYearRate, twoYearRate }) {
   // Strategy 2: Direct two-year investment  
   const strategy2Year2 = 100 * Math.pow(1 + r2, 2);
   
-  // Verify no arbitrage (should be equal)
-  const arbitrageDiff = Math.abs(strategy1Year2 - strategy2Year2);
-  const noArbitrage = arbitrageDiff < 0.001;
-  
-  // Generate cash flow data for visualization - fixed structure
+  // Generate cash flow data for visualization
   const cashFlowData = [
-    // t=0: Initial investments
     {
       period: 0,
       periodLabel: "0",
-      subsequentInvestment: -100,        // Green: Initial investment
-      twoYearInvestment: -100,           // Blue: Initial investment
-      oneYearBondYield: null,
-      impliedForwardRate: null,
+      strategy1Cash: -100,        // Initial investment
+      strategy2Cash: -100,        // Initial investment
       twoYearLine: r2 * 100,
-      twoYearLineLabel: r2 * 100,        // Add this for the orange line label
+      // Add a special data point for 2Y Rate label
+      labelPoint: { x: 1.2, y: r2 * 100, label: `2Y Rate: ${s2}%` }
     },
-    // t=1: First bond matures and reinvestment
     {
-      period: 1, 
+      period: 1,
       periodLabel: "1",
-      subsequentMaturity: strategy1Year1,    // Green: +106.30 First bond matures
-      subsequentReinvestment: -strategy1Year1, // Green: -106.30 Reinvest proceeds  
-      twoYearInvestment: 0,                  // Blue: No cash flow (0, not null)
-      oneYearBondYield: r1 * 100,
-      impliedForwardRate: null,
+      strategy1Maturity: strategy1Year1,    // First bond matures
+      strategy1Reinvest: -strategy1Year1,   // Reinvest proceeds  
+      strategy2Cash: 0,                     // No cash flow
+      oneYearRate: r1 * 100,
       twoYearLine: r2 * 100,
-      twoYearLineLabel: null,
     },
-    // t=2: Final maturity
     {
       period: 2,
       periodLabel: "2", 
-      subsequentInvestment: strategy1Year2,  // Green: Second bond matures
-      twoYearInvestment: strategy2Year2,     // Blue: Two-year bond matures  
-      oneYearBondYield: null,
-      impliedForwardRate: forwardRatePct,
+      strategy1Cash: strategy1Year2,  // Second bond matures
+      strategy2Cash: strategy2Year2,  // Two-Year bond matures  
+      forwardRate: forwardRatePct,
       twoYearLine: r2 * 100,
-      twoYearLineLabel: null,
     }
   ];
   
@@ -130,278 +159,379 @@ function calculateForwardRates({ oneYearRate, twoYearRate }) {
     strategy1Final: strategy1Year2,
     strategy2Final: strategy2Year2,
     strategy1Year1Value: strategy1Year1,
-    arbitrageDiff,
-    noArbitrage,
     cashFlowData,
-    isValid: r1 > 0 && r2 > 0 && r1 < 0.5 && r2 < 0.5 // Reasonable rate bounds
+    isValid: r1 > 0 && r2 > 0 && r1 < 0.5 && r2 < 0.5
   };
 }
 
-// Custom label component that shows values above/below bars
-const CustomLabel = (props) => {
-  const { x, y, width, height, value } = props;
-  
-  if (!value || Math.abs(value) < 0.01) return null;
-  
-  const isNegative = value < 0;
-  const labelY = isNegative ? y + height + 15 : y - 8;
-  
-  // Determine text color based on bar color for accessibility
-  const getTextColor = () => {
-    // Check if label is over a dark bar (blue-600, emerald-500, emerald-800)
-    // Use white text on dark backgrounds, black on light backgrounds
-    if (y > height * 0.5) {
-      // Label is likely over a dark bar area
-      return "#ffffff";
-    }
-    return "#000000";
-  };
-  
-  // Format negative values with parentheses (financial convention)
-  const formatValue = (val) => {
-    const absVal = Math.abs(val);
-    return isNegative ? `(${absVal.toFixed(2)})` : `${absVal.toFixed(2)}`;
-  };
-  
-  return (
-    <text
-      x={x + width / 2}
-      y={labelY}
-      textAnchor="middle"
-      fill={getTextColor()}
-      fontSize="11"
-      fontWeight="bold"
-      stroke={getTextColor() === "#ffffff" ? "#000000" : "none"}
-      strokeWidth={getTextColor() === "#ffffff" ? 0.5 : 0}
-    >
-      {formatValue(value)}
-    </text>
-  );
-};
-
-// Custom dot component with leader line to white space
-const LabeledDot = ({ cx, cy, payload, dataKey, color, name }) => {
-  const value = payload[dataKey];
-  if (!value) return null;
-  
-  // Position dots in clear white space with leader lines
-  let labelX, labelY, dotX, dotY;
-  
-  if (dataKey === 'oneYearBondYield') {
-    // Position in upper-left white space
-    dotX = cx;
-    dotY = cy;
-    labelX = cx - 60;
-    labelY = cy - 80;
-  } else if (dataKey === 'impliedForwardRate') {
-    // Position in upper-right white space, but shorter line
-    dotX = cx;
-    dotY = cy;
-    labelX = cx + 40;
-    labelY = cy - 40;
-  } else if (dataKey === 'twoYearLineLabel') {
-    // Position in left white space for orange line
-    dotX = cx;
-    dotY = cy;
-    labelX = cx - 80;
-    labelY = cy - 50;
-  }
+// Custom component to add the 2Y Rate label - this will definitely show
+const TwoYearRateLabel = ({ chartWidth, chartHeight, s2, color }) => {
+  const labelX = chartWidth * 0.75; // 75% across the chart
+  const labelY = chartHeight * 0.2;  // 20% down from top
   
   return (
     <g>
-      {/* Original dot position */}
-      <circle cx={dotX} cy={dotY} r={4} fill={color} strokeWidth={2} opacity={0.3} />
-      
-      {/* Leader line to label */}
-      <line
-        x1={dotX}
-        y1={dotY}
-        x2={labelX}
-        y2={labelY + 10}
-        stroke={color}
-        strokeWidth={2}
-        strokeDasharray="2 2"
-        opacity={0.8}
+      {/* Small dot */}
+      <circle 
+        cx={chartWidth * 0.65} 
+        cy={chartHeight * 0.25} 
+        r="4" 
+        fill={color} 
+        stroke="white" 
+        strokeWidth="2"
       />
-      
-      {/* Label in white space */}
-      <circle cx={labelX} cy={labelY + 10} r={6} fill={color} strokeWidth={3} />
+      {/* Leader line */}
+      <line 
+        x1={chartWidth * 0.65} 
+        y1={chartHeight * 0.25}
+        x2={labelX - 10} 
+        y2={labelY}
+        stroke={color} 
+        strokeWidth="2" 
+        strokeDasharray="3 3"
+      />
+      {/* Label text */}
       <text 
         x={labelX} 
-        y={labelY - 5} 
-        textAnchor="middle" 
+        y={labelY} 
         fill={color} 
-        fontSize={11} 
+        fontSize="12" 
         fontWeight="bold"
       >
-        {value.toFixed(2)}%
+        2Y Rate: {s2}%
       </text>
     </g>
   );
 };
 
-// White pill label component for better visibility
-const PillLabel = (props) => {
-  const { x, y, width, height, value } = props;
-  
-  if (!value || Math.abs(value) < 0.01) return null;
-  
-  const isNegative = value < 0;
-  const labelY = isNegative ? y + height + 15 : y - 8;
-  
-  // Format with parentheses for negatives
-  const formattedText = isNegative ? `(${Math.abs(value).toFixed(2)})` : `${value.toFixed(2)}`;
-  
-  // Pill dimensions
-  const pillWidth = Math.min(width * 0.9, 65);
-  const pillHeight = 18;
-  const pillX = x + width / 2 - pillWidth / 2;
-  const pillY = labelY - pillHeight / 2 - 7;
-  
-  return (
-    <g>
-      <rect
-        x={pillX}
-        y={pillY}
-        width={pillWidth}
-        height={pillHeight}
-        rx={9}
-        fill="white"
-        stroke="#9ca3af"
-        strokeWidth={1}
-        opacity={0.95}
-      />
-<text
-x={pillX + pillWidth / 2}
-y={pillY + pillHeight / 2 + 4}
-textAnchor="middle"
-fill="black"
-fontSize="10"
-fontWeight="600"
->
-{formattedText}
-</text>
-    </g>
-  );
-};
-
-export default function ForwardRatesCalculator() {
-  const [inputs, setInputs] = useState({ 
-    oneYearRate: 6.30,
-    twoYearRate: 8.00
+function App() {
+  const [inputs, setInputs] = useState({
+    s1: 6.3, // 1-year spot rate percentage
+    s2: 8.0, // 2-year spot rate percentage
   });
-  
+
   const validateInputs = useCallback((inputs) => {
     const errors = {};
     
-    if (!inputs.oneYearRate || inputs.oneYearRate < 0) {
-      errors.oneYearRate = "One-year rate must be positive";
-    } else if (inputs.oneYearRate > 50) {
-      errors.oneYearRate = "One-year rate cannot exceed 50%";
+    if (!inputs.s1 || inputs.s1 < 0) {
+      errors.s1 = "1-Year Spot Rate must be positive";
+    } else if (inputs.s1 > 50) {
+      errors.s1 = "1-Year Spot Rate cannot exceed 50%";
     }
     
-    if (!inputs.twoYearRate || inputs.twoYearRate < 0) {
-      errors.twoYearRate = "Two-year rate must be positive";
-    } else if (inputs.twoYearRate > 50) {
-      errors.twoYearRate = "Two-year rate cannot exceed 50%";
+    if (!inputs.s2 || inputs.s2 < 0) {
+      errors.s2 = "2-Year Spot Rate must be positive";
+    } else if (inputs.s2 > 50) {
+      errors.s2 = "2-Year Spot Rate cannot exceed 50%";
     }
     
-    if (inputs.twoYearRate > 0 && inputs.oneYearRate > 0 && inputs.twoYearRate <= inputs.oneYearRate) {
-      errors.yieldCurve = "Two-year rate should typically be higher than one-year rate for normal yield curve";
+    if (inputs.s2 > 0 && inputs.s1 > 0 && inputs.s2 <= inputs.s1) {
+      errors.yieldCurve = "2-Year rate should typically be higher than 1-year rate for normal yield curve";
     }
     
     return errors;
   }, []);
-  
+
   const handleInputChange = useCallback((field, value) => {
-    setInputs(prev => ({ ...prev, [field]: +value }));
+    setInputs(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
   }, []);
-  
+
   const inputErrors = validateInputs(inputs);
   const model = useMemo(() => {
     if (Object.keys(inputErrors).length > 0) return null;
     return calculateForwardRates(inputs);
   }, [inputs, inputErrors]);
 
+  const formatPercentage = (v) => {
+    if (v == null) return "-";
+    return (v).toFixed(2) + "%";
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto px-4 py-6">
-
-
-        {/* Forward Rate Model Inputs & Results */}
-        <Card title="Implied Forward Interest Rates Analysis">
-          {/* Inputs Section */}
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+      <main className="max-w-7xl mx-auto">
+        
+        <Card title="Implied Forward Rate Calculator">
+          
+          {/* Enhanced Input Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <FormField 
-              id="one-year-rate" 
-              label="One-Year Bond Yield (%)" 
-              helpText="0 - 50%"
-              error={inputErrors.oneYearRate}
+              id="s1-input" 
+              label="1-Year Spot Rate (%)" 
+              helpText="0-50"
+              error={inputErrors.s1}
               required
             >
               <input
-                id="one-year-rate"
+                id="s1-input"
                 type="number"
-                step="0.01"
+                step="0.1"
                 min="0"
                 max="50"
-                value={inputs.oneYearRate}
-                onChange={(e) => handleInputChange('oneYearRate', e.target.value)}
-                className="mt-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                aria-describedby={inputErrors.oneYearRate ? "one-year-rate-error" : undefined}
-                aria-invalid={inputErrors.oneYearRate ? 'true' : 'false'}
+                value={inputs.s1}
+                onChange={(e) => handleInputChange('s1', e.target.value)}
+                className={`mt-1 block w-full rounded-md shadow-sm px-3 py-2 ${
+                  inputErrors.s1 
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                }`}
+                aria-describedby={inputErrors.s1 ? "s1-input-error" : "s1-help"}
+                aria-invalid={inputErrors.s1 ? 'true' : 'false'}
               />
+              <p id="s1-help" className="text-xs text-gray-600 mt-1">
+                Enter as percentage (e.g., 5 for 5%)
+              </p>
             </FormField>
 
             <FormField 
-              id="two-year-rate" 
-              label="Two-Year Bond Yield (%)" 
-              helpText="0 - 50%"
-              error={inputErrors.twoYearRate}
+              id="s2-input" 
+              label="2-Year Spot Rate (%)" 
+              helpText="0-50"
+              error={inputErrors.s2}
               required
             >
               <input
-                id="two-year-rate"
+                id="s2-input"
                 type="number"
-                step="0.01"
+                step="0.1"
                 min="0"
                 max="50"
-                value={inputs.twoYearRate}
-                onChange={(e) => handleInputChange('twoYearRate', e.target.value)}
-                className="mt-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                aria-describedby={inputErrors.twoYearRate ? "two-year-rate-error" : undefined}
-                aria-invalid={inputErrors.twoYearRate ? 'true' : 'false'}
+                value={inputs.s2}
+                onChange={(e) => handleInputChange('s2', e.target.value)}
+                className={`mt-1 block w-full rounded-md shadow-sm px-3 py-2 ${
+                  inputErrors.s2 
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                }`}
+                aria-describedby={inputErrors.s2 ? "s2-input-error" : "s2-help"}
+                aria-invalid={inputErrors.s2 ? 'true' : 'false'}
               />
+              <p id="s2-help" className="text-xs text-gray-600 mt-1">
+                Enter as percentage (e.g., 6 for 6%)
+              </p>
             </FormField>
           </div>
 
           <ValidationMessage errors={inputErrors} />
 
-          {/* Forward Rate Results */}
+          {/* Enhanced Results Section */}
           {model && model.isValid && (
             <>
               <ResultCard
-                title="One-Year Forward Rate (f₁,₁)"
+                title="Implied Forward Rate f(1,1)"
                 value={`${model.forwardRate.toFixed(2)}%`}
-                subtitle="the one-year rate starting in year 1"
-                description={`Formula: f₁,₁ = [(1 + r₂)² ÷ (1 + r₁)] - 1 | ✓ No-arbitrage condition satisfied (both strategies yield $${model.strategy1Final.toFixed(2)})`}
+                subtitle="the 1-year rate starting in year 1"
+                description={
+                  <div>
+                    <div className="mb-2">Formula: f(1,1) = [(1 + s₂)² ÷ (1 + s₁)] - 1</div>
+                    <div className="font-mono text-base bg-white px-2 py-1 rounded border">
+                      f(1,1) = [(1 + {(inputs.s2/100).toFixed(3)})² ÷ (1 + {(inputs.s1/100).toFixed(3)})] - 1
+                    </div>
+                    <div className="text-xs mt-1 text-green-600">✓ No arbitrage: both strategies yield ${model.strategy1Final.toFixed(2)}</div>
+                  </div>
+                }
                 isValid={model.isValid}
               />
 
-              {/* Strategy Comparison */}
+              {/* Strategy Comparison Boxes with Colorblind-Friendly Colors */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <div className="font-medium text-green-800">Subsequent One-Year Investments</div>
-                  <div className="text-sm text-green-700 mt-1">
-                    Year 1: $100 → ${model.strategy1Year1Value.toFixed(2)}<br/>
-                    Year 2: ${model.strategy1Year1Value.toFixed(2)} → ${model.strategy1Final.toFixed(2)}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="font-semibold text-blue-800 mb-2">One-Year Strategy</div>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <div>Year 0 → 1: $100 @ {inputs.s1}% = ${model.strategy1Year1Value.toFixed(2)}</div>
+                    <div>Year 1 → 2: ${model.strategy1Year1Value.toFixed(2)} @ {model.forwardRate.toFixed(2)}% = ${model.strategy1Final.toFixed(2)}</div>
+                    <div className="font-semibold pt-1 border-t border-blue-300">Final Value: ${model.strategy1Final.toFixed(2)}</div>
                   </div>
                 </div>
-                <div className="p-3 bg-purple-50 rounded-lg">
-                  <div className="font-medium text-purple-800">Two-Year Investment</div>
-                  <div className="text-sm text-purple-700 mt-1">
-                    $100 → ${model.strategy2Final.toFixed(2)}<br/>
-                    @ {inputs.twoYearRate}% annually
+                
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="font-semibold text-orange-800 mb-2">Two-Year Strategy</div>
+                  <div className="text-sm text-orange-700 space-y-1">
+                    <div>Year 0 → 2: $100 @ {inputs.s2}% annually</div>
+                    <div>Compound return: (1 + {(inputs.s2/100).toFixed(3)})² = {Math.pow(1 + inputs.s2/100, 2).toFixed(4)}</div>
+                    <div className="font-semibold pt-1 border-t border-orange-300">Final Value: ${model.strategy2Final.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Chart */}
+              <div className="mb-6">
+                <h3 className="font-serif text-lg text-slate-700 mb-4" id="chart-title">
+                  Forward Rate Analysis: Cash Flows & Interest Rates
+                </h3>
+                
+                {/* Chart Legend with Colorblind-Friendly Colors */}
+                <div className="mb-4 text-sm text-gray-600 flex items-center gap-4 flex-wrap">
+                  <span className="inline-flex items-center">
+                    <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.positive}}></span>
+                    One-Year: Initial/Final
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.lightBlue}}></span>
+                    One-Year: Maturity (+)
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.dark}}></span>
+                    One-Year: Reinvest (-)
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.negative}}></span>
+                    Two-Year Strategy
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-2 h-2 bg-blue-700 mr-2 rounded-full"></span>
+                    1Y Rate: {inputs.s1}%
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-2 h-2 bg-purple-700 mr-2 rounded-full"></span>
+                    Forward: {model.forwardRate.toFixed(2)}%
+                  </span>
+                  <span className="inline-flex items-center">
+                    <span className="w-2 h-1 bg-orange-600 mr-2"></span>
+                    2Y Rate: {inputs.s2}%
+                  </span>
+                </div>
+
+                <div className="h-[500px] relative" 
+                     role="img" 
+                     aria-labelledby="chart-title" 
+                     aria-describedby="chart-description">
+                  
+                  <div className="sr-only">
+                    <p id="chart-description">
+                      This chart compares two investment strategies. The One-Year Strategy invests for 1 year then reinvests at the forward rate of {model.forwardRate.toFixed(2)}%. The Two-Year Strategy invests for the full 2 years at {inputs.s2}%. Both yield ${model.strategy1Final.toFixed(2)}.
+                    </p>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={model.cashFlowData}
+                      margin={{ top: 60, right: 80, left: 40, bottom: 40 }}
+                    >
+                      <CartesianGrid stroke="#E5E7EB" strokeDasharray="2 2" />
+                      
+                      {/* Zero reference line */}
+                      <ReferenceLine 
+                        yAxisId="right" 
+                        y={0} 
+                        stroke="#374151" 
+                        strokeWidth={2} 
+                      />
+                      
+                      <XAxis 
+                        dataKey="periodLabel" 
+                        label={{ value: 'Year', position: 'insideBottom', offset: -10 }}
+                      />
+                      <YAxis 
+                        yAxisId="left"
+                        label={{ value: "Interest Rates (%)", angle: -90, position: "insideLeft" }}
+                        tickFormatter={(v) => `${v.toFixed(1)}%`}
+                        domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
+                      />
+                      <YAxis 
+                        yAxisId="right"
+                        orientation="right"
+                        label={{ value: "Cash Flows ($)", angle: -90, position: "insideRight" }}
+                        tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
+                        domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
+                        ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
+                      />
+                      
+                      <Tooltip 
+                        formatter={(value, name) => {
+                          if (name.includes('Rate') || name.includes('Line')) {
+                            return [`${Number(value).toFixed(2)}%`, name];
+                          }
+                          return [`$${Number(value).toFixed(2)}`, name];
+                        }}
+                        labelFormatter={(label) => `Year: ${label}`}
+                        contentStyle={{ fontSize: '12px' }}
+                      />
+
+                      {/* Cash Flow Bars with Colorblind-Friendly Blue/Orange Palette */}
+                      <Bar 
+                        yAxisId="right" 
+                        dataKey="strategy1Cash" 
+                        fill={COLORS.positive}
+                        fillOpacity={0.4}
+                        name="One-Year: Initial/Final"
+                        label={<CleanBarLabel />}
+                      />
+                      <Bar 
+                        yAxisId="right" 
+                        dataKey="strategy1Maturity" 
+                        fill={COLORS.lightBlue}
+                        fillOpacity={0.4}
+                        name="One-Year: Maturity (+)"
+                        label={<CleanBarLabel />}
+                      />
+                      <Bar 
+                        yAxisId="right" 
+                        dataKey="strategy1Reinvest" 
+                        fill={COLORS.dark}
+                        fillOpacity={0.4}
+                        name="One-Year: Reinvest (-)"
+                        label={<CleanBarLabel />}
+                      />
+                      <Bar 
+                        yAxisId="right" 
+                        dataKey="strategy2Cash" 
+                        fill={COLORS.negative}
+                        fillOpacity={0.4}
+                        name="Two-Year Strategy"
+                        label={<CleanBarLabel />}
+                      />
+
+                      {/* Interest Rate Lines and Points */}
+                      <Line 
+                        yAxisId="left" 
+                        type="monotone" 
+                        dataKey="twoYearLine" 
+                        stroke={COLORS.orange} 
+                        strokeWidth={3}
+                        dot={false}
+                        name={`2Y Rate (${inputs.s2}%)`}
+                      />
+                      
+                      <Scatter yAxisId="left" dataKey="oneYearRate" fill="#1d4ed8" name="1Y Spot Rate" r={8}>
+                        <LabelList 
+                          dataKey="oneYearRate" 
+                          position="top" 
+                          formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
+                          fill="#111827" 
+                          fontSize={12}
+                        />
+                      </Scatter>
+                      
+                      <Scatter yAxisId="left" dataKey="forwardRate" fill={COLORS.purple} name="Forward Rate" r={8}>
+                        <LabelList 
+                          dataKey="forwardRate" 
+                          position="bottom" 
+                          formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
+                          fill="#111827" 
+                          fontSize={12}
+                        />
+                      </Scatter>
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  
+                  {/* Absolute positioned 2Y Rate label in top-left - this WILL be visible */}
+                  <div 
+                    className="absolute top-11 left-40 bg-white px-2 py-1 rounded border shadow-sm"
+                    style={{ 
+                      borderColor: COLORS.orange,
+                      color: COLORS.orange,
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-0.5"
+                        style={{ backgroundColor: COLORS.orange }}
+                      ></div>
+                      2Y Rate: {inputs.s2}%
+                    </div>
                   </div>
                 </div>
               </div>
@@ -409,12 +539,12 @@ export default function ForwardRatesCalculator() {
               {/* Screen Reader Data Table */}
               <div className="sr-only">
                 <table>
-                  <caption>Forward rates investment strategy cash flows showing both investment approaches over 3 years</caption>
+                  <caption>Forward rate analysis showing cash flows and rates for both investment strategies</caption>
                   <thead>
                     <tr>
                       <th scope="col">Year</th>
-                      <th scope="col">Subsequent Strategy</th>
-                      <th scope="col">Two-Year Strategy</th>
+                      <th scope="col">One-Year Strategy Cash Flow</th>
+                      <th scope="col">Two-Year Strategy Cash Flow</th>
                       <th scope="col">Interest Rates</th>
                     </tr>
                   </thead>
@@ -423,19 +553,15 @@ export default function ForwardRatesCalculator() {
                       <tr key={row.period}>
                         <th scope="row">{row.periodLabel}</th>
                         <td>
-                          {row.period === 0 && "Initial investment: ($100.00)"}
-                          {row.period === 1 && `Maturity: $${row.subsequentMaturity.toFixed(2)}, Reinvestment: ($${Math.abs(row.subsequentReinvestment).toFixed(2)})`}
-                          {row.period === 2 && `Final maturity: $${row.subsequentInvestment.toFixed(2)}`}
+                          {row.strategy1Cash && `$${row.strategy1Cash.toFixed(2)}`}
+                          {row.strategy1Maturity && ` Maturity: $${row.strategy1Maturity.toFixed(2)}`}
+                          {row.strategy1Reinvest && ` Reinvest: $${row.strategy1Reinvest.toFixed(2)}`}
                         </td>
+                        <td>{row.strategy2Cash ? `$${row.strategy2Cash.toFixed(2)}` : "No cash flow"}</td>
                         <td>
-                          {row.period === 0 && "Initial investment: ($100.00)"}
-                          {row.period === 1 && "No cash flow"}
-                          {row.period === 2 && `Final maturity: $${row.twoYearInvestment.toFixed(2)}`}
-                        </td>
-                        <td>
-                          {row.period === 0 && `Two-year rate: ${inputs.twoYearRate.toFixed(2)}%`}
-                          {row.period === 1 && `One-year rate: ${inputs.oneYearRate.toFixed(2)}%`}
-                          {row.period === 2 && `Forward rate: ${model.forwardRate.toFixed(2)}%`}
+                          {row.oneYearRate && `1Y: ${row.oneYearRate.toFixed(2)}%`}
+                          {row.forwardRate && `Forward: ${row.forwardRate.toFixed(2)}%`}
+                          {row.twoYearLine && `2Y: ${row.twoYearLine.toFixed(2)}%`}
                         </td>
                       </tr>
                     ))}
@@ -443,203 +569,24 @@ export default function ForwardRatesCalculator() {
                 </table>
               </div>
 
-              {/* Chart Legend */}
-              <div className="mb-4 text-sm text-gray-600 flex items-center gap-4 flex-wrap">
-                <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-emerald-500 mr-1 rounded"></span>
-                  Initial/Final
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-emerald-300 mr-1 rounded"></span>
-                  Bond Maturity (+)
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-emerald-800 mr-1 rounded"></span>
-                  Reinvestment (-)
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-3 h-3 bg-blue-600 mr-1 rounded"></span>
-                  Two-Year Strategy
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-2 h-2 bg-blue-700 mr-1 rounded-full"></span>
-                  One-Year: {inputs.oneYearRate.toFixed(2)}%
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-2 h-2 bg-purple-700 mr-1 rounded-full"></span>
-                  Forward: {model.forwardRate.toFixed(2)}%
-                </span>
-                <span className="inline-flex items-center">
-                  <span className="w-2 h-1 bg-orange-600 mr-1"></span>
-                  Two-Year: {inputs.twoYearRate.toFixed(2)}%
-                </span>
-              </div>
-
-              {/* Cash Flow Chart - Simplified */}
-              <div className="h-96 relative" 
-                   role="img" 
-                   aria-labelledby="forward-rates-chart-title" 
-                   aria-describedby="forward-rates-chart-description">
-                
-                <div className="sr-only">
-                  <h3 id="forward-rates-chart-title">Forward Rates Investment Strategy Chart</h3>
-                  <p id="forward-rates-chart-description">
-                    Combined bar and line chart showing cash flows for two investment strategies: 
-                    sequential one-year investments vs direct two-year investment, with implied forward rate of {model.forwardRate.toFixed(2)}%
-                  </p>
-                </div>
-
-                <div className="text-center text-sm text-gray-600 mb-2 font-medium">
-                  Forward Rate Strategy Comparison - Cash Flows & Key Rates
-                </div>
-                
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={model.cashFlowData}
-                    margin={{ top: 20, right: 50, left: 20, bottom: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="periodLabel" 
-                      label={{ value: 'Years', position: 'insideBottom', offset: -10 }}
-                    />
-                    <YAxis 
-                      yAxisId="left"
-                      label={{ value: 'Rates', angle: -90, position: 'insideLeft', style: { fill: '#7c3aed', textAnchor: 'middle' } }}
-                      tickFormatter={(value) => `${value.toFixed(1)}%`}
-                      domain={[0, Math.max(15, model.forwardRate * 1.2)]}
-                      tickCount={8}
-                      tick={{ fill: '#7c3aed' }}
-                      axisLine={{ stroke: '#7c3aed' }}
-                    />
-                    <YAxis 
-                      yAxisId="right"
-                      orientation="right"
-                      label={{ value: 'Cash Flows', angle: 90, position: 'insideRight' }}
-                      tickFormatter={(value) => `$${Math.round(value)}`}
-                    />
-                    <Tooltip 
-                      formatter={(value, name, props) => {
-                        if (name.includes('Rate') || name.includes('Line')) {
-                          return [`${Number(value).toFixed(2)}%`, name];
-                        }
-                        return [`${Number(value).toFixed(2)}`, name];
-                      }}
-                      labelFormatter={(label) => `Year ${label}`}
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        border: '1px solid #ccc',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
-                    />
-                    
-                    {/* Key Rate Line - Two-year rate baseline (render first, behind everything) */}
-                    <Line 
-                      yAxisId="left" 
-                      type="monotone" 
-                      dataKey="twoYearLine" 
-                      stroke="#ea580c" 
-                      strokeWidth={3}
-                      strokeDasharray="5 5"
-                      dot={false}
-                      name={`Two-Year Rate (${inputs.twoYearRate.toFixed(2)}%)`}
-                    />
-                    
-                    {/* Orange line label at year 0 */}
-                    <Line 
-                      yAxisId="left" 
-                      type="monotone" 
-                      dataKey="twoYearLineLabel" 
-                      stroke="#ea580c" 
-                      strokeWidth={0}
-                      dot={<LabeledDot color="#ea580c" name="Two-Year Rate" />}
-                      connectNulls={false}
-                      name={`Two-Year Rate Label`}
-                    />
-                    
-                    {/* Sequential Strategy Cash Flows */}
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentInvestment" 
-                      fill="#10b981" 
-                      name="Sequential: Initial & Final"
-                      label={PillLabel}
-                    />
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentMaturity" 
-                      fill="#34d399" 
-                      name="Sequential: Bond Maturity (+)"
-                      label={PillLabel}
-                    />
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="subsequentReinvestment" 
-                      fill="#065f46" 
-                      name="Sequential: Reinvestment (-)"
-                      label={PillLabel}
-                    />
-                    
-                    {/* Two-Year Strategy Cash Flows */}
-                    <Bar 
-                      yAxisId="right" 
-                      dataKey="twoYearInvestment" 
-                      fill="#2563eb" 
-                      name="Two-Year Strategy"
-                      label={PillLabel}
-                    />
-                    
-                    {/* One-Year Rate Indicator - At year 1 with custom labeled dot */}
-                    <Line 
-                      yAxisId="left" 
-                      type="monotone" 
-                      dataKey="oneYearBondYield" 
-                      stroke="#1d4ed8" 
-                      strokeWidth={0}
-                      dot={<LabeledDot color="#1d4ed8" name="One-Year Rate" />}
-                      connectNulls={false}
-                      name={`One-Year Rate (${inputs.oneYearRate.toFixed(2)}%)`}
-                    />
-                    
-                    {/* Forward Rate Indicator - Only at year 2 with custom labeled dot */}
-                    <Line 
-                      yAxisId="left" 
-                      type="monotone" 
-                      dataKey="impliedForwardRate" 
-                      stroke="#7c3aed" 
-                      strokeWidth={0}
-                      dot={<LabeledDot color="#7c3aed" name="Forward Rate" />}
-                      connectNulls={false}
-                      name={`Forward Rate (${model.forwardRate.toFixed(2)}%)`}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Educational Note */}
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
-                <strong>Cash Flow Additivity Principle:</strong> Under no-arbitrage conditions, both investment 
-                strategies must yield identical returns of ${model.strategy1Final.toFixed(2)}. At year 1, the subsequent 
-                one-year strategy shows two simultaneous cash flows: +${model.strategy1Year1Value.toFixed(2)} 
-                (first bond matures) and -${model.strategy1Year1Value.toFixed(2)} (immediate reinvestment at the 
-                forward rate). This ensures no risk-free arbitrage opportunities exist in bond markets.
-              </div>
             </>
           )}
         </Card>
 
-        {/* Educational Footer */}
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <h2 className="font-semibold text-blue-800 mb-2">Educational Context</h2>
+        {/* Educational Context */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h2 className="font-semibold text-blue-800 mb-2">Understanding Forward Rates</h2>
           <div className="text-sm text-blue-700 space-y-2">
-            <p><strong>Implied Forward Rate:</strong> The market-implied rate for future borrowing/lending periods</p>
-            <p><strong>No-Arbitrage Principle:</strong> Both investment strategies must yield identical returns</p>
-            <p><strong>Yield Curve Analysis:</strong> Forward rates reveal market expectations about future interest rates</p>
-            <p className="text-xs mt-2">This model assumes no transaction costs, perfect liquidity, and no default risk. Real markets may show slight deviations due to these factors.</p>
+            <p><strong>No-Arbitrage Principle:</strong> Both investment strategies must yield identical returns to prevent risk-free profit opportunities.</p>
+            <p><strong>Forward Rate Formula:</strong> f(1,1) = [(1 + s₂)² ÷ (1 + s₁)] - 1</p>
+            <p><strong>Market Interpretation:</strong> The forward rate represents the market's expectation for the 1-year rate starting in year 1.</p>
+            <p className="text-xs mt-2 text-blue-600">This model assumes no transaction costs, perfect liquidity, and no default risk.</p>
           </div>
         </div>
+
       </main>
     </div>
   );
 }
+
+export default App;
