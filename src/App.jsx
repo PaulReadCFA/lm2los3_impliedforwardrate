@@ -527,7 +527,7 @@ function App() {
         <>
           {/* MOBILE: Chart first, then results, then inputs */}
           <div className="lg:hidden space-y-6">
-            <ResultsSection model={model} inputs={inputs} />›
+            <ResultsSection model={model} inputs={inputs} />
             <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
               <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
             </Card>
