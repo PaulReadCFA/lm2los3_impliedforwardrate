@@ -552,16 +552,16 @@ function App() {
 
       {/* INPUTS - Now at bottom for both mobile and desktop */}
 <Card title="Implied Forward Rate Calculator">
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
     
     {/* First input - inline layout */}
-    <div className="flex items-center gap-3">
-      <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center">
+    <div className="flex items-center gap-2">
+      <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
         1-Year Spot Rate (%)
         <span className="text-red-500 ml-1" aria-label="required">*</span>
         <InfoIcon id="s1-input">Enter as percentage (e.g., 6.3 for 6.3%)</InfoIcon>
       </label>
-      <div className="flex-1 min-w-0 max-w-[120px]">
+      <div className="min-w-0 w-24">
         <input
           id="s1-input"
           type="number"
@@ -570,7 +570,7 @@ function App() {
           max="50"
           value={inputs.s1}
           onChange={(e) => handleInputChange('s1', e.target.value)}
-          className={`block w-full rounded-md shadow-sm px-3 py-2 ${
+          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
             inputErrors.s1 
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
               : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
@@ -586,13 +586,13 @@ function App() {
     </div>
 
     {/* Second input - inline layout */}
-    <div className="flex items-center gap-3">
-      <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center">
+    <div className="flex items-center gap-2">
+      <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
         2-Year Spot Rate (%)
         <span className="text-red-500 ml-1" aria-label="required">*</span>
         <InfoIcon id="s2-input">Enter as percentage (e.g., 8.0 for 8.0%)</InfoIcon>
       </label>
-      <div className="flex-1 min-w-0 max-w-[120px]">
+      <div className="min-w-0 w-24">
         <input
           id="s2-input"
           type="number"
@@ -601,7 +601,7 @@ function App() {
           max="50"
           value={inputs.s2}
           onChange={(e) => handleInputChange('s2', e.target.value)}
-          className={`block w-full rounded-md shadow-sm px-3 py-2 ${
+          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
             inputErrors.s2 
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
               : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
