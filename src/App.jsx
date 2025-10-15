@@ -11,18 +11,26 @@ import {
   Scatter,
   LabelList,
   ReferenceLine,
+  Label,
 } from "recharts";
 
-// Accessibility-first color palette (colorblind-safe)
+// CFA-branded color palette (accessible & colorblind-safe)
 const COLORS = {
-  primary: "#4476FF",        
-  dark: "#1e40af",          
-  positive: "#2563eb",      
-  negative: "#ea580c",      
-  purple: "#7c3aed",        
-  orange: "#ea580c",        
-  lightBlue: "#3b82f6",     
-  darkOrange: "#c2410c",    
+  // CFA Brand Colors
+  primary: "#4476ff",        // CFA Bright Blue (OK for graphics/large text)
+  dark: "#06005a",           // CFA Dark Blue (excellent contrast for text)
+  darkAlt: "#38337b",        // CFA Dark Blue 80% (excellent contrast)
+  
+  // For bars and data visualization
+  positive: "#6991ff",       // CFA Bright Blue 80% (better contrast)
+  negative: "#ea792d",       // CFA Orange (OK for graphics)
+  purple: "#7a46ff",         // CFA Purple (good contrast)
+  purpleAlt: "#50037f",      // CFA Eggplant (excellent contrast)
+  
+  // Supporting colors
+  lightBlue: "#4476ff",      // CFA Bright Blue
+  orange: "#ea792d",         // CFA Orange
+  darkText: "#06005a",       // For labels that need maximum readability
 };
 
 // Shared Card Component
@@ -134,7 +142,7 @@ const CleanBarLabel = (props) => {
       x={x + width / 2}
       y={labelY}
       textAnchor="middle"
-      fill="#111827"
+      fill={COLORS.darkText}
       fontSize="12"
       fontWeight="normal"
     >
@@ -204,11 +212,11 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
             One-Year: Initial/Final
           </span>
           <span className="inline-flex items-center">
-            <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.lightBlue}}></span>
+            <span className="w-3 h-3 mr-2 rounded opacity-50" style={{backgroundColor: COLORS.primary}}></span>
             One-Year: Maturity (+)
           </span>
           <span className="inline-flex items-center">
-            <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.dark}}></span>
+            <span className="w-3 h-3 mr-2 rounded opacity-50" style={{backgroundColor: COLORS.darkAlt}}></span>
             One-Year: Reinvest (-)
           </span>
           <span className="inline-flex items-center">
@@ -219,11 +227,11 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
 
         <div className="text-xs text-gray-600 flex items-center gap-3 flex-wrap">
           <span className="inline-flex items-center">
-            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.dark}}></span>
+            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.darkAlt}}></span>
             1Y Rate: {inputs.s1}%
           </span>
           <span className="inline-flex items-center">
-            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.purple}}></span>
+            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.purpleAlt}}></span>
             Forward: {model.forwardRate.toFixed(2)}%
           </span>
           <span className="inline-flex items-center">
@@ -260,19 +268,32 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
               label={{ value: 'Year', position: 'insideBottom', offset: -10 }}
             />
             <YAxis 
-              yAxisId="left"
-              label={{ value: "Interest Rates (%)", angle: -90, position: "insideLeft" }}
-              tickFormatter={(v) => `${v.toFixed(1)}%`}
-              domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
-            />
-            <YAxis 
-              yAxisId="right"
-              orientation="right"
-              label={{ value: "Cash Flows ($)", angle: -90, position: "insideRight" }}
-              tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
-              domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
-              ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
-            />
+  yAxisId="left"
+  label={{ 
+    value: "Interest Rates (%)", 
+    angle: -90, 
+    position: "insideLeft",
+    offset: -5,  // Add this - adjusts distance from axis
+    dy: 50
+  }}
+  tickFormatter={(v) => `${v.toFixed(1)}%`}
+  domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
+/>
+
+<YAxis 
+  yAxisId="right"
+  orientation="right"
+  label={{ 
+    value: "Cash Flows ($)", 
+    angle: -90, 
+    position: "insideRight",
+    offset: -15,
+    dy: -70  // Add this - adjusts distance from axis
+  }}
+  tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
+  domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
+  ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
+/>
             
             <Tooltip 
               formatter={(value, name) => {
@@ -298,16 +319,16 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
             <Bar 
               yAxisId="right" 
               dataKey="strategy1Maturity" 
-              fill={COLORS.lightBlue}
-              fillOpacity={0.4}
+              fill={COLORS.primary}
+              fillOpacity={0.5}
               name="One-Year: Maturity (+)"
               label={<CleanBarLabel />}
             />
             <Bar 
               yAxisId="right" 
               dataKey="strategy1Reinvest" 
-              fill={COLORS.dark}
-              fillOpacity={0.4}
+              fill={COLORS.darkAlt}
+              fillOpacity={0.5}
               name="One-Year: Reinvest (-)"
               label={<CleanBarLabel />}
             />
@@ -329,24 +350,43 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
               strokeWidth={3}
               dot={false}
               name={`2Y Rate (${inputs.s2}%)`}
-            />
+            >
+              <Label 
+                content={(props) => {
+                  const { viewBox } = props;
+                  const yOffset = 90 - (inputs.s2 * 0.5);
+                  
+                  return (
+                    <text
+                      x={viewBox.x + 15}
+                      y={viewBox.y + yOffset}
+                      fill={COLORS.orange}
+                      fontSize={12}
+                      fontWeight="600"
+                    >
+                      {`2Y Rate: ${inputs.s2}%`}
+                    </text>
+                  );
+                }}
+              />
+            </Line>
             
-            <Scatter yAxisId="left" dataKey="oneYearRate" fill={COLORS.dark} name="1Y Spot Rate" r={8}>
+            <Scatter yAxisId="left" dataKey="oneYearRate" fill={COLORS.darkAlt} name="1Y Spot Rate" r={8}>
               <LabelList 
                 dataKey="oneYearRate" 
                 position="top" 
                 formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
-                fill="#111827" 
+                fill={COLORS.darkText} 
                 fontSize={12}
               />
             </Scatter>
             
-            <Scatter yAxisId="left" dataKey="forwardRate" fill={COLORS.purple} name="Forward Rate" r={8}>
+            <Scatter yAxisId="left" dataKey="forwardRate" fill={COLORS.purpleAlt} name="Forward Rate" r={8}>
               <LabelList 
                 dataKey="forwardRate" 
                 position="bottom" 
                 formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
-                fill="#111827" 
+                fill={COLORS.darkText} 
                 fontSize={12}
               />
             </Scatter>
@@ -478,95 +518,111 @@ function App() {
     return (v).toFixed(2) + "%";
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <main className="max-w-7xl mx-auto space-y-6">
-        
-        {/* INPUTS */}
-        <Card title="Implied Forward Rate Calculator">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField 
-              id="s1-input" 
-              label="1-Year Spot Rate (%)" 
-              helpText="Enter as percentage (e.g., 6.3 for 6.3%)"
-              error={inputErrors.s1}
-              required
-            >
-              <input
-                id="s1-input"
-                type="number"
-                step="0.1"
-                min="0"
-                max="50"
-                value={inputs.s1}
-                onChange={(e) => handleInputChange('s1', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm px-3 py-2 ${
-                  inputErrors.s1 
-                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                }`}
-                aria-invalid={inputErrors.s1 ? 'true' : 'false'}
-              />
-            </FormField>
-
-            <FormField 
-              id="s2-input" 
-              label="2-Year Spot Rate (%)" 
-              helpText="Enter as percentage (e.g., 8.0 for 8.0%)"
-              error={inputErrors.s2}
-              required
-            >
-              <input
-                id="s2-input"
-                type="number"
-                step="0.1"
-                min="0"
-                max="50"
-                value={inputs.s2}
-                onChange={(e) => handleInputChange('s2', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm px-3 py-2 ${
-                  inputErrors.s2 
-                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                }`}
-                aria-invalid={inputErrors.s2 ? 'true' : 'false'}
-              />
-            </FormField>
+ return (
+  <div className="min-h-screen bg-gray-50 p-6 font-sans">
+    <main className="max-w-7xl mx-auto space-y-6">
+      
+      {/* CHART AND RESULTS */}
+      {model && model.isValid && (
+        <>
+          {/* MOBILE: Chart first, then results, then inputs */}
+          <div className="lg:hidden space-y-6">
+            <ResultsSection model={model} inputs={inputs} />›
+            <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
+              <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
+            </Card>
+            
+            
           </div>
-          
-          <ValidationMessage errors={inputErrors} />
-        </Card>
 
-        {/* CHART AND RESULTS */}
-        {model && model.isValid && (
-          <>
-            {/* MOBILE: Chart first, then results */}
-            <div className="lg:hidden space-y-6">
-              <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
-                <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
-              </Card>
-              
+          {/* DESKTOP: Two column layout */}
+          <div className="hidden lg:grid lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-1">
               <ResultsSection model={model} inputs={inputs} />
             </div>
 
-            {/* DESKTOP: Two column layout */}
-            <div className="hidden lg:grid lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-1">
-                <ResultsSection model={model} inputs={inputs} />
-              </div>
-
-              <div className="lg:col-span-3">
-                <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
-                  <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
-                </Card>
-              </div>
+            <div className="lg:col-span-3">
+              <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
+                <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
+              </Card>
             </div>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-      </main>
+      {/* INPUTS - Now at bottom for both mobile and desktop */}
+<Card title="Implied Forward Rate Calculator">
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    
+    {/* First input - inline layout */}
+    <div className="flex items-center gap-3">
+      <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center">
+        1-Year Spot Rate (%)
+        <span className="text-red-500 ml-1" aria-label="required">*</span>
+        <InfoIcon id="s1-input">Enter as percentage (e.g., 6.3 for 6.3%)</InfoIcon>
+      </label>
+      <div className="flex-1 min-w-0 max-w-[120px]">
+        <input
+          id="s1-input"
+          type="number"
+          step="0.1"
+          min="0"
+          max="50"
+          value={inputs.s1}
+          onChange={(e) => handleInputChange('s1', e.target.value)}
+          className={`block w-full rounded-md shadow-sm px-3 py-2 ${
+            inputErrors.s1 
+              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
+          aria-invalid={inputErrors.s1 ? 'true' : 'false'}
+        />
+        {inputErrors.s1 && (
+          <div className="text-red-600 text-xs mt-1" role="alert">
+            {inputErrors.s1}
+          </div>
+        )}
+      </div>
     </div>
-  );
-}
+
+    {/* Second input - inline layout */}
+    <div className="flex items-center gap-3">
+      <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center">
+        2-Year Spot Rate (%)
+        <span className="text-red-500 ml-1" aria-label="required">*</span>
+        <InfoIcon id="s2-input">Enter as percentage (e.g., 8.0 for 8.0%)</InfoIcon>
+      </label>
+      <div className="flex-1 min-w-0 max-w-[120px]">
+        <input
+          id="s2-input"
+          type="number"
+          step="0.1"
+          min="0"
+          max="50"
+          value={inputs.s2}
+          onChange={(e) => handleInputChange('s2', e.target.value)}
+          className={`block w-full rounded-md shadow-sm px-3 py-2 ${
+            inputErrors.s2 
+              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
+          aria-invalid={inputErrors.s2 ? 'true' : 'false'}
+        />
+        {inputErrors.s2 && (
+          <div className="text-red-600 text-xs mt-1" role="alert">
+            {inputErrors.s2}
+          </div>
+        )}
+      </div>
+    </div>
+
+  </div>
+  
+  <ValidationMessage errors={inputErrors} />
+</Card>
+
+    </main>
+  </div>
+);}
 
 export default App;
