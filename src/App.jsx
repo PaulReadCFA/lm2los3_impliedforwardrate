@@ -16,21 +16,16 @@ import {
 
 // CFA-branded color palette (accessible & colorblind-safe)
 const COLORS = {
-  // CFA Brand Colors
-  primary: "#4476ff",        // CFA Bright Blue (OK for graphics/large text)
-  dark: "#06005a",           // CFA Dark Blue (excellent contrast for text)
-  darkAlt: "#38337b",        // CFA Dark Blue 80% (excellent contrast)
-  
-  // For bars and data visualization
-  positive: "#6991ff",       // CFA Bright Blue 80% (better contrast)
-  negative: "#ea792d",       // CFA Orange (OK for graphics)
-  purple: "#7a46ff",         // CFA Purple (good contrast)
-  purpleAlt: "#50037f",      // CFA Eggplant (excellent contrast)
-  
-  // Supporting colors
-  lightBlue: "#4476ff",      // CFA Bright Blue
-  orange: "#ea792d",         // CFA Orange
-  darkText: "#06005a",       // For labels that need maximum readability
+  primary: "#4476ff",
+  dark: "#06005a",
+  darkAlt: "#38337b",
+  positive: "#6991ff",
+  negative: "#ea792d",
+  purple: "#7a46ff",
+  purpleAlt: "#50037f",
+  lightBlue: "#4476ff",
+  orange: "#ea792d",
+  darkText: "#06005a",
 };
 
 // Shared Card Component
@@ -77,52 +72,17 @@ function InfoIcon({ children, id }) {
   );
 }
 
-// Enhanced form field with accessible info icons
-function FormField({ id, label, children, error, helpText, required = false }) {
-  return (
-    <div className="flex flex-col">
-      <label htmlFor={id} className="font-medium text-gray-700 mb-1 flex items-center">
-        {label}
-        {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
-        {helpText && <InfoIcon id={id}>{helpText}</InfoIcon>}
-      </label>
-      {children}
-      {error && (
-        <div className="text-red-600 text-xs mt-1" role="alert" id={`${id}-error`}>
-          {error}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Validation message component
 function ValidationMessage({ errors }) {
   if (!errors || Object.keys(errors).length === 0) return null;
   
   return (
-    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
+    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
       <h3 className="text-red-800 font-semibold text-sm mb-2">Please correct the following:</h3>
       <ul className="text-red-800 text-sm space-y-1">
         {Object.entries(errors).map(([field, error]) => (
           <li key={field}>• {error}</li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-// Result display card
-function ResultCard({ title, value, subtitle, description, isValid = true }) {
-  if (!isValid) return null;
-  
-  return (
-    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-      <div className="text-3xl font-serif text-blue-600 mb-2">{value}</div>
-      <div className="text-sm text-gray-700">
-        <div><strong>{title}</strong> - {subtitle}</div>
-        <div className="mt-2">{description}</div>
-      </div>
     </div>
   );
 }
@@ -200,7 +160,7 @@ function calculateForwardRates({ s1, s2 }) {
   };
 }
 
-// Chart component to avoid duplication
+// Chart component
 function ForwardRateChart({ model, inputs, formatPercentage }) {
   return (
     <>
@@ -268,32 +228,31 @@ function ForwardRateChart({ model, inputs, formatPercentage }) {
               label={{ value: 'Year', position: 'insideBottom', offset: -10 }}
             />
             <YAxis 
-  yAxisId="left"
-  label={{ 
-    value: "Interest Rates (%)", 
-    angle: -90, 
-    position: "insideLeft",
-    offset: -5,  // Add this - adjusts distance from axis
-    dy: 50
-  }}
-  tickFormatter={(v) => `${v.toFixed(1)}%`}
-  domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
-/>
-
-<YAxis 
-  yAxisId="right"
-  orientation="right"
-  label={{ 
-    value: "Cash Flows ($)", 
-    angle: -90, 
-    position: "insideRight",
-    offset: -15,
-    dy: -70  // Add this - adjusts distance from axis
-  }}
-  tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
-  domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
-  ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
-/>
+              yAxisId="left"
+              label={{ 
+                value: "Interest Rates (%)", 
+                angle: -90, 
+                position: "insideLeft",
+                offset: -5,
+                dy: 50
+              }}
+              tickFormatter={(v) => `${v.toFixed(1)}%`}
+              domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
+            />
+            <YAxis 
+              yAxisId="right"
+              orientation="right"
+              label={{ 
+                value: "Cash Flows ($)", 
+                angle: -90, 
+                position: "insideRight",
+                offset: -15,
+                dy: -70
+              }}
+              tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
+              domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
+              ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
+            />
             
             <Tooltip 
               formatter={(value, name) => {
@@ -435,21 +394,19 @@ function ResultsSection({ model, inputs }) {
   return (
     <div className="space-y-6">
       {/* Forward Rate Result */}
-      <ResultCard
-        title="Implied Forward Rate f(1,1)"
-        value={`${model.forwardRate.toFixed(2)}%`}
-        subtitle="the 1-year rate starting in year 1"
-        description={
-          <div>
+      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="text-3xl font-serif text-blue-600 mb-2">{model.forwardRate.toFixed(2)}%</div>
+        <div className="text-sm text-gray-700">
+          <div><strong>Implied Forward Rate f(1,1)</strong> - the 1-year rate starting in year 1</div>
+          <div className="mt-2">
             <div className="mb-2 text-xs">Formula: f(1,1) = [(1 + s₂)² ÷ (1 + s₁)] - 1</div>
             <div className="font-mono text-xs bg-white px-2 py-1 rounded border">
               f(1,1) = [(1 + {(inputs.s2/100).toFixed(3)})² ÷ (1 + {(inputs.s1/100).toFixed(3)})] - 1
             </div>
             <div className="text-xs mt-2 text-blue-600">✓ No arbitrage: both strategies yield ${model.strategy1Final.toFixed(2)}</div>
           </div>
-        }
-        isValid={model.isValid}
-      />
+        </div>
+      </div>
 
       {/* Strategy Comparison Boxes */}
       <div className="space-y-4">
@@ -518,111 +475,104 @@ function App() {
     return (v).toFixed(2) + "%";
   };
 
- return (
-  <div className="min-h-screen bg-gray-50 p-6 font-sans">
-    <main className="max-w-7xl mx-auto space-y-6">
-      
-      {/* CHART AND RESULTS */}
-      {model && model.isValid && (
-        <>
-          {/* MOBILE: Chart first, then results, then inputs */}
-          <div className="lg:hidden space-y-6">
-            <ResultsSection model={model} inputs={inputs} />
-            <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
-              <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
-            </Card>
-            
-            
-          </div>
-
-          {/* DESKTOP: Two column layout */}
-          <div className="hidden lg:grid lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1">
-              <ResultsSection model={model} inputs={inputs} />
-            </div>
-
-            <div className="lg:col-span-3">
-              <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
+  return (
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+      <main className="max-w-7xl mx-auto space-y-6">
+        
+        {/* RESULTS AND CHART */}
+        {model && model.isValid && (
+          <>
+            {/* MOBILE: Results first, then chart */}
+            <div className="lg:hidden space-y-6">
+              <Card title="Results">
+                <ResultsSection model={model} inputs={inputs} />
+              </Card>
+              <Card title="Forward Rate Analysis">
                 <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
               </Card>
             </div>
-          </div>
-        </>
-      )}
 
-      {/* INPUTS - Now at bottom for both mobile and desktop */}
-<Card title="Implied Forward Rate Calculator">
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    
-    {/* First input - inline layout */}
-    <div className="flex items-center gap-2">
-      <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
-        1-Year Spot Rate (%)
-        <span className="text-red-500 ml-1" aria-label="required">*</span>
-        <InfoIcon id="s1-input">Enter as percentage (e.g., 6.3 for 6.3%)</InfoIcon>
-      </label>
-      <div className="min-w-0 w-24">
-        <input
-          id="s1-input"
-          type="number"
-          step="0.1"
-          min="0"
-          max="50"
-          value={inputs.s1}
-          onChange={(e) => handleInputChange('s1', e.target.value)}
-          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
-            inputErrors.s1 
-              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-          }`}
-          aria-invalid={inputErrors.s1 ? 'true' : 'false'}
-        />
-        {inputErrors.s1 && (
-          <div className="text-red-600 text-xs mt-1" role="alert">
-            {inputErrors.s1}
-          </div>
+            {/* DESKTOP: Two column layout - Results (1/5) + Chart (4/5) */}
+            <div className="hidden lg:grid lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-1">
+                <Card title="Results">
+                  <ResultsSection model={model} inputs={inputs} />
+                </Card>
+              </div>
+
+              <div className="lg:col-span-4">
+                <Card title="Forward Rate Analysis">
+                  <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
+                </Card>
+              </div>
+            </div>
+          </>
         )}
-      </div>
-    </div>
 
-    {/* Second input - inline layout */}
-    <div className="flex items-center gap-2">
-      <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
-        2-Year Spot Rate (%)
-        <span className="text-red-500 ml-1" aria-label="required">*</span>
-        <InfoIcon id="s2-input">Enter as percentage (e.g., 8.0 for 8.0%)</InfoIcon>
-      </label>
-      <div className="min-w-0 w-24">
-        <input
-          id="s2-input"
-          type="number"
-          step="0.1"
-          min="0"
-          max="50"
-          value={inputs.s2}
-          onChange={(e) => handleInputChange('s2', e.target.value)}
-          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
-            inputErrors.s2 
-              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-          }`}
-          aria-invalid={inputErrors.s2 ? 'true' : 'false'}
-        />
-        {inputErrors.s2 && (
-          <div className="text-red-600 text-xs mt-1" role="alert">
-            {inputErrors.s2}
+        {/* INPUTS - Always at bottom, full width */}
+        <Card title="Implied Forward Rate Calculator">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+            
+            {/* First input - inline layout */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
+                1-Year Spot Rate (%)
+                <span className="text-red-500 ml-1" aria-label="required">*</span>
+                <InfoIcon id="s1-input">Enter as percentage (e.g., 6.3 for 6.3%)</InfoIcon>
+              </label>
+              <div className="w-24">
+                <input
+                  id="s1-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="50"
+                  value={inputs.s1}
+                  onChange={(e) => handleInputChange('s1', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
+                    inputErrors.s1 
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
+                  aria-invalid={inputErrors.s1 ? 'true' : 'false'}
+                />
+              </div>
+            </div>
+
+            {/* Second input - inline layout */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
+                2-Year Spot Rate (%)
+                <span className="text-red-500 ml-1" aria-label="required">*</span>
+                <InfoIcon id="s2-input">Enter as percentage (e.g., 8.0 for 8.0%)</InfoIcon>
+              </label>
+              <div className="w-24">
+                <input
+                  id="s2-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="50"
+                  value={inputs.s2}
+                  onChange={(e) => handleInputChange('s2', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
+                    inputErrors.s2 
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
+                  aria-invalid={inputErrors.s2 ? 'true' : 'false'}
+                />
+              </div>
+            </div>
+
           </div>
-        )}
-      </div>
+          
+          <ValidationMessage errors={inputErrors} />
+        </Card>
+
+      </main>
     </div>
-
-  </div>
-  
-  <ValidationMessage errors={inputErrors} />
-</Card>
-
-    </main>
-  </div>
-);}
+  );
+}
 
 export default App;
