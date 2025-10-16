@@ -1,30 +1,39 @@
-import { useMemo, useState, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
   Bar,
   Line,
-  CartesianGrid,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
-  Cell
+  Scatter,
+  LabelList,
+  ReferenceLine,
+  Label,
 } from "recharts";
 
-// CFA-branded color palette
+// CFA-branded color palette (accessible & colorblind-safe)
 const COLORS = {
-  primary: "#4476ff",
-  dark: "#06005a",
-  darkAlt: "#38337b",
-  positive: "#6991ff",
-  negative: "#ea792d",
-  purple: "#7a46ff",
-  purpleAlt: "#50037f",
-  lightBlue: "#4476ff",
-  orange: "#ea792d",
-  darkText: "#06005a",
+  // CFA Brand Colors
+  primary: "#4476ff",        // CFA Bright Blue (OK for graphics/large text)
+  dark: "#06005a",           // CFA Dark Blue (excellent contrast for text)
+  darkAlt: "#38337b",        // CFA Dark Blue 80% (excellent contrast)
+  
+  // For bars and data visualization
+  positive: "#6991ff",       // CFA Bright Blue 80% (better contrast)
+  negative: "#ea792d",       // CFA Orange (OK for graphics)
+  purple: "#7a46ff",         // CFA Purple (good contrast)
+  purpleAlt: "#50037f",      // CFA Eggplant (excellent contrast)
+  
+  // Supporting colors
+  lightBlue: "#4476ff",      // CFA Bright Blue
+  orange: "#ea792d",         // CFA Orange
+  darkText: "#06005a",       // For labels that need maximum readability
 };
 
+// Shared Card Component
 function Card({ title, children, className = "" }) {
   return (
     <div className={`bg-white rounded-2xl shadow-md p-5 border border-gray-100 ${className}`}>
@@ -34,6 +43,7 @@ function Card({ title, children, className = "" }) {
   );
 }
 
+// Accessible info icon with tooltip
 function InfoIcon({ children, id }) {
   const [showTooltip, setShowTooltip] = useState(false);
   
@@ -57,6 +67,7 @@ function InfoIcon({ children, id }) {
           id={`${id}-tooltip`}
           role="tooltip"
           className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10 max-w-xs"
+          style={{ fontSize: '11px' }}
         >
           {children}
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
@@ -66,11 +77,31 @@ function InfoIcon({ children, id }) {
   );
 }
 
+// Enhanced form field with accessible info icons
+function FormField({ id, label, children, error, helpText, required = false }) {
+  return (
+    <div className="flex flex-col">
+      <label htmlFor={id} className="font-medium text-gray-700 mb-1 flex items-center">
+        {label}
+        {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
+        {helpText && <InfoIcon id={id}>{helpText}</InfoIcon>}
+      </label>
+      {children}
+      {error && (
+        <div className="text-red-600 text-xs mt-1" role="alert" id={`${id}-error`}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Validation message component
 function ValidationMessage({ errors }) {
   if (!errors || Object.keys(errors).length === 0) return null;
   
   return (
-    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
+    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
       <h3 className="text-red-800 font-semibold text-sm mb-2">Please correct the following:</h3>
       <ul className="text-red-800 text-sm space-y-1">
         {Object.entries(errors).map(([field, error]) => (
@@ -81,453 +112,517 @@ function ValidationMessage({ errors }) {
   );
 }
 
-function CustomBarLabel(props) {
-  const { x, y, width, height, value } = props;
-  
-  if (!value || Math.abs(value) < 0.0001) return null;
+// Result display card
+function ResultCard({ title, value, subtitle, description, isValid = true }) {
+  if (!isValid) return null;
   
   return (
-    <text
-      x={x + width / 2}
-      y={y - 30}
-      textAnchor="middle"
-      fill={COLORS.darkText}
-      fontSize="11"
-      fontWeight="bold"
-    >
-      {value.toFixed(4)}
-    </text>
-  );
-}
-
-function calculateForwardExchangeRate({ spotRate, domesticRate, foreignRate }) {
-  const r_d = domesticRate / 100;
-  const r_f = foreignRate / 100;
-  const initialInvestment = 1000;
-  
-  const forwardRate = spotRate * Math.exp(r_f - r_d);
-  
-  const domesticEndingValue = initialInvestment * (1 + r_d);
-  const foreignCurrencyAmount = initialInvestment * spotRate;
-  const foreignEndingValue = foreignCurrencyAmount * (1 + r_f);
-  const domesticEquivalent = foreignEndingValue / forwardRate;
-  
-  const arbitrageDiff = Math.abs(domesticEndingValue - domesticEquivalent);
-  const noArbitrage = arbitrageDiff < 0.01;
-  
-  const chartData = [
-    {
-      name: "t = 0",
-      exchangeRate: spotRate,
-      domesticRate: domesticRate,
-      foreignRate: foreignRate,
-      type: "Spot Rate"
-    },
-    {
-      name: "t = 1", 
-      exchangeRate: forwardRate,
-      domesticRate: domesticRate,
-      foreignRate: foreignRate,
-      type: "Forward Rate"
-    }
-  ];
-  
-  return {
-    forwardRate,
-    domesticEndingValue,
-    foreignEndingValue,
-    domesticEquivalent,
-    arbitrageDiff,
-    noArbitrage,
-    chartData,
-    isValid: spotRate > 0 && r_d > -1 && r_f > -1
-  };
-}
-
-function ResultsSection({ model, inputs }) {
-  return (
-    <div className="space-y-6">
-      {/* Forward Rate Result */}
-      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div className="text-3xl font-serif text-blue-600 mb-2">{model.forwardRate.toFixed(4)}</div>
-        <div className="text-sm text-gray-700">
-          <div><strong>Implied Forward Exchange Rate</strong> - the no-arbitrage forward rate</div>
-          <div className="mt-2">
-            <div className="mb-2 text-xs">Using Covered Interest Rate Parity:</div>
-            <div className="font-mono text-xs bg-white px-2 py-1 rounded border">
-              F = S × e<sup>(r<sub>f</sub> - r<sub>d</sub>)</sup>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Strategy Comparison */}
-      <div className="space-y-4">
-        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-          <div className="font-semibold text-green-800 mb-2 text-sm">Domestic Investment</div>
-          <div className="text-xs text-green-700 space-y-1">
-            <div>Invest $1,000 at {inputs.domesticRate.toFixed(3)}%</div>
-            <div className="font-semibold pt-1 border-t border-green-300">Final: ${model.domesticEndingValue.toFixed(2)}</div>
-          </div>
-        </div>
-        
-        <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-          <div className="font-semibold text-purple-800 mb-2 text-sm">Foreign Investment</div>
-          <div className="text-xs text-purple-700 space-y-1">
-            <div>Convert → invest at {inputs.foreignRate.toFixed(3)}% → convert back</div>
-            <div className="font-semibold pt-1 border-t border-purple-300">Final: ${model.domesticEquivalent.toFixed(2)}</div>
-          </div>
-        </div>
+    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+      <div className="text-3xl font-serif text-blue-600 mb-2">{value}</div>
+      <div className="text-sm text-gray-700">
+        <div><strong>{title}</strong> - {subtitle}</div>
+        <div className="mt-2">{description}</div>
       </div>
     </div>
   );
 }
 
-function ForwardExchangeChart({ model, inputs }) {
-  // Calculate Y-axis range for interest rates
-  const minRate = Math.min(inputs.domesticRate, inputs.foreignRate);
-  const maxRate = Math.max(inputs.domesticRate, inputs.foreignRate);
-  const ratePadding = Math.max((maxRate - minRate) * 0.5, 0.5);
-  const rateMin = Math.max(0, minRate - ratePadding);
-  const rateMax = maxRate + ratePadding;
+// Clean bar labels for cash flows
+const CleanBarLabel = (props) => {
+  const { x, y, width, height, value } = props;
+  
+  if (!value || Math.abs(value) < 0.01) return null;
+  
+  const isNegative = value < 0;
+  const labelY = isNegative ? y + height + 20 : y - 10;
+  const displayValue = isNegative ? `($${Math.abs(value).toFixed(2)})` : `$${value.toFixed(2)}`;
+  
+  return (
+    <text
+      x={x + width / 2}
+      y={labelY}
+      textAnchor="middle"
+      fill={COLORS.darkText}
+      fontSize="12"
+      fontWeight="normal"
+    >
+      {displayValue}
+    </text>
+  );
+};
 
-  // Calculate Y-axis range for exchange rates
-  const minExRate = Math.min(inputs.spotRate, model.forwardRate);
-  const maxExRate = Math.max(inputs.spotRate, model.forwardRate);
-  const exRatePadding = Math.max((maxExRate - minExRate) * 0.3, 0.2);
-  const exRateMin = Math.max(0, minExRate - exRatePadding);
-  const exRateMax = maxExRate + exRatePadding;
-
-  // Custom label component for domestic rate (renders below the line)
-  const DomesticLabel = (props) => {
-    const { x, y, value, index } = props;
-    if (!value || index !== 0) return null; // Only show label on first point
-    
-    const centerX = x + 100;
-    const labelY = y + 35; // Below the point
-    
-    return (
-      <g>
-        {/* Leader line */}
-        <line
-          x1={centerX}
-          y1={labelY - 8}
-          x2={x}
-          y2={y}
-          stroke={COLORS.purple}
-          strokeWidth={1}
-          opacity={0.7}
-          strokeDasharray="2,2"
-        />
-        {/* Label text */}
-        <text
-          x={centerX}
-          y={labelY}
-          textAnchor="middle"
-          fill={COLORS.darkText}
-          fontSize="11"
-          fontWeight="bold"
-        >
-          Domestic: {value.toFixed(3)}%
-        </text>
-      </g>
-    );
+// Calculate forward rates and cash flows
+function calculateForwardRates({ s1, s2 }) {
+  const r1 = s1 / 100;
+  const r2 = s2 / 100;
+  
+  const forwardRate = (Math.pow(1 + r2, 2) / (1 + r1)) - 1;
+  const forwardRatePct = forwardRate * 100;
+  
+  const strategy1Year1 = 100 * (1 + r1);
+  const strategy1Year2 = strategy1Year1 * (1 + forwardRate);
+  const strategy2Year2 = 100 * Math.pow(1 + r2, 2);
+  
+  const cashFlowData = [
+    {
+      period: 0,
+      periodLabel: "0",
+      strategy1Cash: -100,
+      strategy2Cash: -100,
+      twoYearLine: r2 * 100,
+    },
+    {
+      period: 1,
+      periodLabel: "1",
+      strategy1Maturity: strategy1Year1,
+      strategy1Reinvest: -strategy1Year1,
+      strategy2Cash: 0,
+      oneYearRate: r1 * 100,
+      twoYearLine: r2 * 100,
+    },
+    {
+      period: 2,
+      periodLabel: "2", 
+      strategy1Cash: strategy1Year2,
+      strategy2Cash: strategy2Year2,
+      forwardRate: forwardRatePct,
+      twoYearLine: r2 * 100,
+    }
+  ];
+  
+  return {
+    forwardRate: forwardRatePct,
+    strategy1Final: strategy1Year2,
+    strategy2Final: strategy2Year2,
+    strategy1Year1Value: strategy1Year1,
+    cashFlowData,
+    isValid: r1 > 0 && r2 > 0 && r1 < 0.5 && r2 < 0.5
   };
+}
 
-  // Custom label component for foreign rate (renders above the line)
-  const ForeignLabel = (props) => {
-    const { x, y, value, index } = props;
-    if (!value || index !== 0) return null; // Only show label on first point
-    
-    const centerX = x + 100;
-    const labelY = y - 25; // Above the point
-    
-    return (
-      <g>
-        {/* Leader line */}
-        <line
-          x1={centerX}
-          y1={labelY + 8}
-          x2={x}
-          y2={y}
-          stroke={COLORS.orange}
-          strokeWidth={1}
-          opacity={0.7}
-          strokeDasharray="2,2"
-        />
-        {/* Label text */}
-        <text
-          x={centerX}
-          y={labelY}
-          textAnchor="middle"
-          fill={COLORS.darkText}
-          fontSize="11"
-          fontWeight="bold"
-        >
-          Foreign: {value.toFixed(3)}%
-        </text>
-      </g>
-    );
-  };
-
+// Chart component to avoid duplication
+function ForwardRateChart({ model, inputs, formatPercentage }) {
   return (
     <>
-      {/* Legends */}
+      {/* Chart Legends */}
       <div className="mb-4 space-y-2">
         <div className="text-sm text-gray-600 flex items-center gap-3 flex-wrap">
           <span className="inline-flex items-center">
-            <span className="w-4 h-4 mr-2 rounded border-2" style={{backgroundColor: '#00bbff', borderColor: '#06005a'}}></span>
-            Spot Rate: {inputs.spotRate.toFixed(4)} (t=0)
+            <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.positive}}></span>
+            One-Year: Initial/Final
           </span>
           <span className="inline-flex items-center">
-            <span className="w-4 h-4 mr-2 rounded border-2" style={{backgroundColor: '#50037f', borderColor: '#06005a'}}></span>
-            Forward Rate: {model.forwardRate.toFixed(4)} (t=1)
+            <span className="w-3 h-3 mr-2 rounded opacity-50" style={{backgroundColor: COLORS.primary}}></span>
+            One-Year: Maturity (+)
+          </span>
+          <span className="inline-flex items-center">
+            <span className="w-3 h-3 mr-2 rounded opacity-50" style={{backgroundColor: COLORS.darkAlt}}></span>
+            One-Year: Reinvest (-)
+          </span>
+          <span className="inline-flex items-center">
+            <span className="w-3 h-3 mr-2 rounded opacity-40" style={{backgroundColor: COLORS.negative}}></span>
+            Two-Year Strategy
           </span>
         </div>
+
         <div className="text-xs text-gray-600 flex items-center gap-3 flex-wrap">
           <span className="inline-flex items-center">
-            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.purple}}></span>
-            Domestic: {inputs.domesticRate.toFixed(3)}%
+            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.darkAlt}}></span>
+            1Y Rate: {inputs.s1}%
           </span>
           <span className="inline-flex items-center">
-            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.orange}}></span>
-            Foreign: {inputs.foreignRate.toFixed(3)}%
+            <span className="w-2 h-2 mr-2 rounded-full" style={{backgroundColor: COLORS.purpleAlt}}></span>
+            Forward: {model.forwardRate.toFixed(2)}%
+          </span>
+          <span className="inline-flex items-center">
+            <span className="w-2 h-1 mr-2" style={{backgroundColor: COLORS.orange}}></span>
+            2Y Rate: {inputs.s2}%
           </span>
         </div>
       </div>
 
       {/* Chart */}
-      <div className="h-[450px]" role="img" aria-labelledby="chart-title" aria-describedby="chart-description">
+      <div className="h-[450px]" 
+           role="img" 
+           aria-labelledby="chart-title" 
+           aria-describedby="chart-description">
+        
         <div className="sr-only">
-          <h3 id="chart-title">Exchange Rate and Interest Rate Data</h3>
+          <h3 id="chart-title">Forward Rate Analysis Chart</h3>
           <p id="chart-description">
-            Bar chart comparing spot exchange rate (cyan bar with dark blue border at t=0, value {inputs.spotRate.toFixed(4)}) 
-            versus forward exchange rate (purple bar with dark blue border at t=1, value {model.forwardRate.toFixed(4)}), 
-            alongside domestic interest rate (purple line, {inputs.domesticRate.toFixed(3)}%) and 
-            foreign interest rate (orange line, {inputs.foreignRate.toFixed(3)}%).
-            {model.forwardRate > inputs.spotRate 
-              ? ' The forward rate is higher, indicating the foreign currency is expected to strengthen.'
-              : ' The forward rate is lower, indicating the foreign currency is expected to weaken.'}
+            This chart compares two investment strategies. The One-Year Strategy invests for 1 year then reinvests at the forward rate of {model.forwardRate.toFixed(2)}%. The Two-Year Strategy invests for the full 2 years at {inputs.s2}%. Both yield ${model.strategy1Final.toFixed(2)}.
           </p>
         </div>
 
         <ResponsiveContainer width="100%" height={450}>
-          <ComposedChart data={model.chartData} margin={{ top: 60, right: 120, left: 20, bottom: 50 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" label={{ value: 'Time Periods', position: 'insideBottom', offset: -10 }} />
-            <YAxis 
-              yAxisId="left"
-              label={{ value: 'Exchange Rate', angle: -90, position: 'insideLeft' }}
-              domain={[exRateMin, exRateMax]}
-              tickFormatter={(value) => value.toFixed(2)}
+          <ComposedChart
+            data={model.cashFlowData}
+            margin={{ top: 60, right: 80, left: 40, bottom: 40 }}
+          >
+            <CartesianGrid stroke="#E5E7EB" strokeDasharray="2 2" />
+            
+            <ReferenceLine yAxisId="right" y={0} stroke="#374151" strokeWidth={2} />
+            
+            <XAxis 
+              dataKey="periodLabel" 
+              label={{ value: 'Year', position: 'insideBottom', offset: -10 }}
             />
             <YAxis 
-              yAxisId="right"
-              orientation="right"
-              label={{ value: 'Interest Rate', angle: 90, position: 'insideRight',dx: 25 }}
-              domain={[rateMin, rateMax]}
-              tickFormatter={(value) => `${value.toFixed(2)}%`}
-            />
+  yAxisId="left"
+  label={{ 
+    value: "Interest Rates (%)", 
+    angle: -90, 
+    position: "insideLeft",
+    offset: -5,  // Add this - adjusts distance from axis
+    dy: 50
+  }}
+  tickFormatter={(v) => `${v.toFixed(1)}%`}
+  domain={[0, Math.max(inputs.s1, inputs.s2, model.forwardRate) + 2]}
+/>
+
+<YAxis 
+  yAxisId="right"
+  orientation="right"
+  label={{ 
+    value: "Cash Flows ($)", 
+    angle: -90, 
+    position: "insideRight",
+    offset: -15,
+    dy: -70  // Add this - adjusts distance from axis
+  }}
+  tickFormatter={(v) => v === 0 ? "$0" : `$${v.toFixed(0)}`}
+  domain={[-120, Math.max(120, model.strategy2Final * 1.1)]}
+  ticks={[-100, -50, 0, 50, 100, Math.max(120, Math.ceil(model.strategy2Final / 10) * 10)]}
+/>
+            
             <Tooltip 
               formatter={(value, name) => {
-                if (name === 'Exchange Rate') return [value.toFixed(4), name];
-                if (name.includes('Rate')) return [`${value.toFixed(3)}%`, name];
-                return [value, name];
+                if (name === 'periodLabel' || name === 'period') return [null, null];
+                if (name.includes('Rate') || name.includes('Line')) {
+                  return [`${Number(value).toFixed(2)}%`, name];
+                }
+                return [`$${Number(value).toFixed(2)}`, name];
               }}
-              labelFormatter={(label) => `Time: ${label}`}
+              labelFormatter={(label) => `Year: ${label}`}
+              contentStyle={{ fontSize: '12px' }}
             />
-            
-            <Bar yAxisId="left" dataKey="exchangeRate" barSize={60} label={<CustomBarLabel />}>
-              <Cell fill="#00bbff" stroke="#06005a" strokeWidth={2} />
-              <Cell fill="#50037f" stroke="#06005a" strokeWidth={2} />
-            </Bar>
-            
-            <Line 
-              yAxisId="right"
-              type="monotone" 
-              dataKey="domesticRate" 
-              stroke={COLORS.purple} 
-              strokeWidth={3}
-              dot={{ fill: COLORS.purple, strokeWidth: 2, r: 5 }}
-              name="Domestic Rate"
-              label={<DomesticLabel />}
+
+            {/* Cash Flow Bars */}
+            <Bar 
+              yAxisId="right" 
+              dataKey="strategy1Cash" 
+              fill={COLORS.positive}
+              fillOpacity={0.4}
+              name="One-Year: Initial/Final"
+              label={<CleanBarLabel />}
             />
-            
+            <Bar 
+              yAxisId="right" 
+              dataKey="strategy1Maturity" 
+              fill={COLORS.primary}
+              fillOpacity={0.5}
+              name="One-Year: Maturity (+)"
+              label={<CleanBarLabel />}
+            />
+            <Bar 
+              yAxisId="right" 
+              dataKey="strategy1Reinvest" 
+              fill={COLORS.darkAlt}
+              fillOpacity={0.5}
+              name="One-Year: Reinvest (-)"
+              label={<CleanBarLabel />}
+            />
+            <Bar 
+              yAxisId="right" 
+              dataKey="strategy2Cash" 
+              fill={COLORS.negative}
+              fillOpacity={0.4}
+              name="Two-Year Strategy"
+              label={<CleanBarLabel />}
+            />
+
+            {/* Interest Rate Visualization */}
             <Line 
-              yAxisId="right"
+              yAxisId="left" 
               type="monotone" 
-              dataKey="foreignRate" 
+              dataKey="twoYearLine" 
               stroke={COLORS.orange} 
               strokeWidth={3}
-              dot={{ fill: COLORS.orange, strokeWidth: 2, r: 5 }}
-              name="Foreign Rate"
-              label={<ForeignLabel />}
-            />
+              dot={false}
+              name={`2Y Rate (${inputs.s2}%)`}
+            >
+              <Label 
+                content={(props) => {
+                  const { viewBox } = props;
+                  const yOffset = 90 - (inputs.s2 * 0.5);
+                  
+                  return (
+                    <text
+                      x={viewBox.x + 15}
+                      y={viewBox.y + yOffset}
+                      fill={COLORS.orange}
+                      fontSize={12}
+                      fontWeight="600"
+                    >
+                      {`2Y Rate: ${inputs.s2}%`}
+                    </text>
+                  );
+                }}
+              />
+            </Line>
+            
+            <Scatter yAxisId="left" dataKey="oneYearRate" fill={COLORS.darkAlt} name="1Y Spot Rate" r={8}>
+              <LabelList 
+                dataKey="oneYearRate" 
+                position="top" 
+                formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
+                fill={COLORS.darkText} 
+                fontSize={12}
+              />
+            </Scatter>
+            
+            <Scatter yAxisId="left" dataKey="forwardRate" fill={COLORS.purpleAlt} name="Forward Rate" r={8}>
+              <LabelList 
+                dataKey="forwardRate" 
+                position="bottom" 
+                formatter={(value) => value ? `${formatPercentage(value)}` : ''} 
+                fill={COLORS.darkText} 
+                fontSize={12}
+              />
+            </Scatter>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Educational note */}
-      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
-        <strong>Covered Interest Rate Parity:</strong> The forward rate prevents arbitrage by ensuring both strategies yield identical returns when currency risk is hedged.
+      {/* Screen Reader Data Table */}
+      <div className="sr-only">
+        <table>
+          <caption>Forward rate analysis data showing cash flows and rates for both strategies</caption>
+          <thead>
+            <tr>
+              <th scope="col">Year</th>
+              <th scope="col">One-Year Strategy</th>
+              <th scope="col">Two-Year Strategy</th>
+              <th scope="col">Interest Rates</th>
+            </tr>
+          </thead>
+          <tbody>
+            {model.cashFlowData.map(row => (
+              <tr key={row.period}>
+                <th scope="row">{row.periodLabel}</th>
+                <td>
+                  {row.strategy1Cash && `$${row.strategy1Cash.toFixed(2)}`}
+                  {row.strategy1Maturity && ` Maturity: $${row.strategy1Maturity.toFixed(2)}`}
+                  {row.strategy1Reinvest && ` Reinvest: $${row.strategy1Reinvest.toFixed(2)}`}
+                </td>
+                <td>{row.strategy2Cash ? `$${row.strategy2Cash.toFixed(2)}` : "No cash flow"}</td>
+                <td>
+                  {row.oneYearRate && `1Y: ${row.oneYearRate.toFixed(2)}%`}
+                  {row.forwardRate && `Forward: ${row.forwardRate.toFixed(2)}%`}
+                  {row.twoYearLine && `2Y: ${row.twoYearLine.toFixed(2)}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   );
 }
 
-export default function App() {
-  const [inputs, setInputs] = useState({ 
-    spotRate: 1.2602,
-    domesticRate: 2.360,
-    foreignRate: 2.430
+// Results component
+function ResultsSection({ model, inputs }) {
+  return (
+    <div className="space-y-6">
+      {/* Forward Rate Result */}
+      <ResultCard
+        title="Implied Forward Rate f(1,1)"
+        value={`${model.forwardRate.toFixed(2)}%`}
+        subtitle="the 1-year rate starting in year 1"
+        description={
+          <div>
+            <div className="mb-2 text-xs">Formula: f(1,1) = [(1 + s₂)² ÷ (1 + s₁)] - 1</div>
+            <div className="font-mono text-xs bg-white px-2 py-1 rounded border">
+              f(1,1) = [(1 + {(inputs.s2/100).toFixed(3)})² ÷ (1 + {(inputs.s1/100).toFixed(3)})] - 1
+            </div>
+            <div className="text-xs mt-2 text-blue-600">✓ No arbitrage: both strategies yield ${model.strategy1Final.toFixed(2)}</div>
+          </div>
+        }
+        isValid={model.isValid}
+      />
+
+      {/* Strategy Comparison Boxes */}
+      <div className="space-y-4">
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="font-semibold text-blue-800 mb-2 text-sm">One-Year Strategy</div>
+          <div className="text-xs text-blue-700 space-y-1">
+            <div>Year 0 → 1: $100 @ {inputs.s1}% = ${model.strategy1Year1Value.toFixed(2)}</div>
+            <div>Year 1 → 2: ${model.strategy1Year1Value.toFixed(2)} @ {model.forwardRate.toFixed(2)}% = ${model.strategy1Final.toFixed(2)}</div>
+            <div className="font-semibold pt-1 border-t border-blue-300">Final: ${model.strategy1Final.toFixed(2)}</div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+          <div className="font-semibold text-orange-800 mb-2 text-sm">Two-Year Strategy</div>
+          <div className="text-xs text-orange-700 space-y-1">
+            <div>Year 0 → 2: $100 @ {inputs.s2}% annually</div>
+            <div>Compound: (1 + {(inputs.s2/100).toFixed(3)})² = {Math.pow(1 + inputs.s2/100, 2).toFixed(4)}</div>
+            <div className="font-semibold pt-1 border-t border-orange-300">Final: ${model.strategy2Final.toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [inputs, setInputs] = useState({
+    s1: 6.3,
+    s2: 8.0,
   });
-  
+
   const validateInputs = useCallback((inputs) => {
     const errors = {};
     
-    if (!inputs.spotRate || inputs.spotRate <= 0) {
-      errors.spotRate = "Spot exchange rate must be positive";
-    } else if (inputs.spotRate > 10) {
-      errors.spotRate = "Spot exchange rate seems unrealistically high";
+    if (!inputs.s1 || inputs.s1 < 0) {
+      errors.s1 = "1-Year Spot Rate must be positive";
+    } else if (inputs.s1 > 50) {
+      errors.s1 = "1-Year Spot Rate cannot exceed 50%";
     }
     
-    if (inputs.domesticRate <= -100) {
-      errors.domesticRate = "Domestic interest rate must be greater than -100%";
-    } else if (inputs.domesticRate > 50) {
-      errors.domesticRate = "Domestic interest rate cannot exceed 50%";
+    if (!inputs.s2 || inputs.s2 < 0) {
+      errors.s2 = "2-Year Spot Rate must be positive";
+    } else if (inputs.s2 > 50) {
+      errors.s2 = "2-Year Spot Rate cannot exceed 50%";
     }
     
-    if (inputs.foreignRate <= -100) {
-      errors.foreignRate = "Foreign interest rate must be greater than -100%";
-    } else if (inputs.foreignRate > 50) {
-      errors.foreignRate = "Foreign interest rate cannot exceed 50%";
+    if (inputs.s2 > 0 && inputs.s1 > 0 && inputs.s2 <= inputs.s1) {
+      errors.yieldCurve = "2-Year rate should typically be higher than 1-year rate for normal yield curve";
     }
     
     return errors;
   }, []);
-  
+
   const handleInputChange = useCallback((field, value) => {
-    setInputs(prev => ({ ...prev, [field]: +value }));
+    setInputs(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
   }, []);
-  
+
   const inputErrors = validateInputs(inputs);
   const model = useMemo(() => {
     if (Object.keys(inputErrors).length > 0) return null;
-    return calculateForwardExchangeRate(inputs);
+    return calculateForwardRates(inputs);
   }, [inputs, inputErrors]);
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <main className="max-w-7xl mx-auto space-y-6">
+  const formatPercentage = (v) => {
+    if (v == null) return "-";
+    return (v).toFixed(2) + "%";
+  };
 
-        {/* RESULTS AND CHART */}
-        {model && model.isValid && (
-          <>
-            {/* MOBILE */}
-            <div className="lg:hidden space-y-6">
-              <Card title="Results">
-                <ResultsSection model={model} inputs={inputs} />
-              </Card>
-              <Card title="Forward Exchange Rate Analysis">
-                <ForwardExchangeChart model={model} inputs={inputs} />
-              </Card>
-            </div>
-
-            {/* DESKTOP */}
-            <div className="hidden lg:grid lg:grid-cols-5 gap-6">
-              <div className="lg:col-span-1">
-                <Card title="Results">
-                  <ResultsSection model={model} inputs={inputs} />
-                </Card>
-              </div>
-              <div className="lg:col-span-4">
-                <Card title="Forward Exchange Rate Analysis">
-                  <ForwardExchangeChart model={model} inputs={inputs} />
-                </Card>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* INPUTS */}
-        <Card title="Forward Exchange Rate Calculator">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+ return (
+  <div className="min-h-screen bg-gray-50 p-6 font-sans">
+    <main className="max-w-7xl mx-auto space-y-6">
+      
+      {/* CHART AND RESULTS */}
+      {model && model.isValid && (
+        <>
+          {/* MOBILE: Chart first, then results, then inputs */}
+          <div className="lg:hidden space-y-6">
+            <ResultsSection model={model} inputs={inputs} />
+            <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
+              <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
+            </Card>
             
-            <div className="flex items-center gap-2">
-              <label htmlFor="spot-rate" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
-                Spot Exchange Rate
-                <span className="text-red-500 ml-1" aria-label="required">*</span>
-                <InfoIcon id="spot-rate">Foreign currency per 1 domestic</InfoIcon>
-              </label>
-              <div className="w-24">
-                <input
-                  id="spot-rate"
-                  type="number"
-                  step="0.0001"
-                  min="0.0001"
-                  max="10"
-                  value={inputs.spotRate}
-                  onChange={(e) => handleInputChange('spotRate', e.target.value)}
-                  className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
-                    inputErrors.spotRate ? 'border-red-300' : 'border-gray-300'
-                  } focus:border-blue-500 focus:ring-blue-500`}
-                  aria-invalid={inputErrors.spotRate ? 'true' : 'false'}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label htmlFor="domestic-rate" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
-                Domestic Rate (%)
-                <span className="text-red-500 ml-1" aria-label="required">*</span>
-                <InfoIcon id="domestic-rate">Annual rate for domestic currency</InfoIcon>
-              </label>
-              <div className="w-24">
-                <input
-                  id="domestic-rate"
-                  type="number"
-                  step="0.001"
-                  min="-99"
-                  max="50"
-                  value={inputs.domesticRate}
-                  onChange={(e) => handleInputChange('domesticRate', e.target.value)}
-                  className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
-                    inputErrors.domesticRate ? 'border-red-300' : 'border-gray-300'
-                  } focus:border-blue-500 focus:ring-blue-500`}
-                  aria-invalid={inputErrors.domesticRate ? 'true' : 'false'}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label htmlFor="foreign-rate" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
-                Foreign Rate (%)
-                <span className="text-red-500 ml-1" aria-label="required">*</span>
-                <InfoIcon id="foreign-rate">Annual rate for foreign currency</InfoIcon>
-              </label>
-              <div className="w-24">
-                <input
-                  id="foreign-rate"
-                  type="number"
-                  step="0.001"
-                  min="-99"
-                  max="50"
-                  value={inputs.foreignRate}
-                  onChange={(e) => handleInputChange('foreignRate', e.target.value)}
-                  className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
-                    inputErrors.foreignRate ? 'border-red-300' : 'border-gray-300'
-                  } focus:border-blue-500 focus:ring-blue-500`}
-                  aria-invalid={inputErrors.foreignRate ? 'true' : 'false'}
-                />
-              </div>
-            </div>
-
+            
           </div>
-          
-          <ValidationMessage errors={inputErrors} />
-        </Card>
 
-      </main>
+          {/* DESKTOP: Two column layout */}
+          <div className="hidden lg:grid lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-1">
+              <ResultsSection model={model} inputs={inputs} />
+            </div>
+
+            <div className="lg:col-span-3">
+              <Card title="Forward Rate Analysis: Cash Flows & Interest Rates">
+                <ForwardRateChart model={model} inputs={inputs} formatPercentage={formatPercentage} />
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* INPUTS - Now at bottom for both mobile and desktop */}
+<Card title="Implied Forward Rate Calculator">
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    
+    {/* First input - inline layout */}
+    <div className="flex items-center gap-2">
+      <label htmlFor="s1-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
+        1-Year Spot Rate (%)
+        <span className="text-red-500 ml-1" aria-label="required">*</span>
+        <InfoIcon id="s1-input">Enter as percentage (e.g., 6.3 for 6.3%)</InfoIcon>
+      </label>
+      <div className="min-w-0 w-24">
+        <input
+          id="s1-input"
+          type="number"
+          step="0.1"
+          min="0"
+          max="50"
+          value={inputs.s1}
+          onChange={(e) => handleInputChange('s1', e.target.value)}
+          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
+            inputErrors.s1 
+              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
+          aria-invalid={inputErrors.s1 ? 'true' : 'false'}
+        />
+        {inputErrors.s1 && (
+          <div className="text-red-600 text-xs mt-1" role="alert">
+            {inputErrors.s1}
+          </div>
+        )}
+      </div>
     </div>
-  );
-}
+
+    {/* Second input - inline layout */}
+    <div className="flex items-center gap-2">
+      <label htmlFor="s2-input" className="font-medium text-gray-700 whitespace-nowrap flex items-center text-sm">
+        2-Year Spot Rate (%)
+        <span className="text-red-500 ml-1" aria-label="required">*</span>
+        <InfoIcon id="s2-input">Enter as percentage (e.g., 8.0 for 8.0%)</InfoIcon>
+      </label>
+      <div className="min-w-0 w-24">
+        <input
+          id="s2-input"
+          type="number"
+          step="0.1"
+          min="0"
+          max="50"
+          value={inputs.s2}
+          onChange={(e) => handleInputChange('s2', e.target.value)}
+          className={`block w-full rounded-md shadow-sm px-2 py-2 text-sm ${
+            inputErrors.s2 
+              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
+          aria-invalid={inputErrors.s2 ? 'true' : 'false'}
+        />
+        {inputErrors.s2 && (
+          <div className="text-red-600 text-xs mt-1" role="alert">
+            {inputErrors.s2}
+          </div>
+        )}
+      </div>
+    </div>
+
+  </div>
+  
+  <ValidationMessage errors={inputErrors} />
+</Card>
+
+    </main>
+  </div>
+);}
+
+export default App;
